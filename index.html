@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1e2a56" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Trip Budget" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Trip Budget</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main id="app">
+
+    <!-- ============ HOME ============ -->
+    <section id="homeView" class="view">
+
+      <!-- Hero banner -->
+      <div class="hero" id="hero">
+        <div class="hero__art" id="heroArt">
+          <svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+            <defs>
+              <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#2b3a8f"/><stop offset=".55" stop-color="#7b6cf6"/><stop offset="1" stop-color="#ff9d76"/>
+              </linearGradient>
+              <linearGradient id="m1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#3d4db3"/><stop offset="1" stop-color="#2b3577"/>
+              </linearGradient>
+              <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#5a63d8"/><stop offset="1" stop-color="#39418f"/>
+              </linearGradient>
+            </defs>
+            <rect width="375" height="160" fill="url(#sky)"/>
+            <circle cx="300" cy="42" r="20" fill="#ffe3a3" opacity=".9"/>
+            <path d="M0 160 L70 70 L110 120 L160 55 L215 160 Z" fill="url(#m1)"/>
+            <path d="M120 160 L200 80 L245 125 L300 65 L375 160 Z" fill="url(#m2)"/>
+            <path d="M160 55 L175 75 L145 75 Z" fill="#e9edff"/>
+            <path d="M300 65 L313 83 L286 83 Z" fill="#e9edff"/>
+          </svg>
+        </div>
+        <div class="hero__scrim"></div>
+        <div class="hero__content">
+          <div class="hero__date" id="heroDate">—</div>
+          <h1 class="hero__title" id="heroTitle">Austria 2026</h1>
+          <div class="hero__meta" id="heroDates"></div>
+        </div>
+      </div>
+
+      <!-- Daily brief + weather strip -->
+      <div class="brief card-soft" id="briefStrip" hidden>
+        <div class="brief__weather" id="briefWeather"></div>
+        <div class="brief__text" id="briefText"></div>
+      </div>
+
+      <!-- Inline quick add -->
+      <div class="qa card-soft">
+        <div class="qa__row">
+          <input type="number" inputmode="decimal" id="expAmount" class="qa__amount" placeholder="0" aria-label="Amount" />
+          <select id="expCurrency" class="qa__cur" aria-label="Currency"></select>
+        </div>
+        <div class="chips" id="catChips"></div>
+        <div class="qa__row qa__row--opts">
+          <div class="seg" id="paidSeg">
+            <button type="button" data-mode="paid" class="is-active">Paid</button>
+            <button type="button" data-mode="committed">Committed</button>
+          </div>
+          <input type="text" id="expNote" class="qa__note" placeholder="note…" aria-label="Note" />
+        </div>
+        <div class="qa__row qa__row--deposit" id="depositRow" hidden>
+          <label for="expDeposit" class="qa__deplabel">Deposit paid now</label>
+          <input type="number" inputmode="decimal" id="expDeposit" class="qa__deposit" placeholder="0" />
+        </div>
+        <button class="btn-add" id="addBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+          Add expense
+        </button>
+      </div>
+
+      <!-- Summary -->
+      <div class="summary card-soft">
+        <div class="summary__top">
+          <div>
+            <div class="summary__label">Committed</div>
+            <div class="summary__big" id="totalCommitted">$0</div>
+          </div>
+          <div class="summary__right">
+            <div class="summary__label">Left in budget</div>
+            <div class="summary__left" id="totalLeft">$0</div>
+          </div>
+        </div>
+        <div class="bar bar--lg" id="totalBar"></div>
+        <div class="legend">
+          <span><i class="paid"></i>Paid</span>
+          <span><i class="committed"></i>Committed</span>
+          <label class="cur-toggle">
+            <select id="displayCurrency" aria-label="Display currency"></select>
+          </label>
+        </div>
+        <div class="summary__stats">
+          <div class="stat"><div class="stat__label">Budget</div><div class="stat__val" id="statBudget">$0</div></div>
+          <div class="stat"><div class="stat__label">Paid</div><div class="stat__val" id="statPaid">$0</div></div>
+          <div class="stat"><div class="stat__label">Still to pay</div><div class="stat__val" id="statOutstanding">$0</div></div>
+        </div>
+      </div>
+
+      <!-- Category cards render here -->
+      <div id="categoryList"></div>
+    </section>
+
+    <!-- ============ LEDGER ============ -->
+    <section id="ledgerView" class="view" hidden>
+      <h2 class="page-title">Ledger</h2>
+      <div class="ledger-empty card-soft" id="ledgerEmpty" hidden>
+        <p>No transactions yet.<br/>Add your first expense from Home.</p>
+      </div>
+      <div id="ledgerBoard"></div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="settingsView" class="view" hidden>
+      <h2 class="page-title">Settings</h2>
+
+      <div class="card-soft">
+        <label class="field">
+          <span>Trip name</span>
+          <input type="text" id="setTripName" />
+        </label>
+        <label class="field">
+          <span>Trip dates <small>(free text, e.g. "Jul 25 – Aug 15")</small></span>
+          <input type="text" id="setTripDates" />
+        </label>
+        <label class="field">
+          <span>Banner photo</span>
+          <input type="file" id="setBanner" accept="image/*" />
+        </label>
+        <button class="btn-ghost" id="clearBannerBtn">Use default mountain art</button>
+        <label class="field">
+          <span>Who am I on this phone?</span>
+          <select id="setWhoAmI"></select>
+        </label>
+        <label class="field">
+          <span>Base currency <small>(budgets are set in this)</small></span>
+          <select id="setBaseCurrency"></select>
+        </label>
+      </div>
+
+      <div class="card-soft">
+        <div class="card__title">Categories &amp; budgets</div>
+        <div id="catEditor"></div>
+        <button class="btn-ghost" id="addCatBtn">+ Add category</button>
+      </div>
+
+      <div class="card-soft">
+        <div class="card__title">Currencies &amp; rates</div>
+        <p class="hint">Rate = value of <b>1 unit</b> in your base currency. Base is always 1.</p>
+        <div id="rateEditor"></div>
+        <button class="btn-ghost" id="addCurBtn">+ Add currency</button>
+      </div>
+
+      <button class="btn-danger" id="resetBtn">Reset all data</button>
+    </section>
+  </main>
+
+  <!-- Bottom navigation -->
+  <nav class="nav" aria-label="Main">
+    <button class="nav__btn is-active" data-tab="home" aria-label="Home">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="nav__btn" data-tab="ledger" aria-label="Ledger">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1.4" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="10" width="18" height="4" rx="1.4" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="16" width="18" height="4" rx="1.4" stroke="currentColor" stroke-width="1.8"/></svg>
+      <span>Ledger</span>
+    </button>
+    <button class="nav__btn" data-tab="settings" aria-label="Settings">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.2 7.2 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- ============ LEDGER EDIT SHEET ============ -->
+  <div class="sheet-backdrop" id="editSheet" hidden>
+    <div class="sheet" role="dialog" aria-label="Edit transaction">
+      <div class="sheet__handle"></div>
+      <div class="sheet__title" id="editTitle">Edit</div>
+
+      <div class="qa__row">
+        <input type="number" inputmode="decimal" id="editAmount" class="qa__amount" aria-label="Amount" />
+        <select id="editCurrency" class="qa__cur" aria-label="Currency"></select>
+      </div>
+      <div class="chips" id="editCatChips"></div>
+      <label class="field">
+        <span>Paid so far</span>
+        <input type="number" inputmode="decimal" id="editPaid" />
+      </label>
+      <label class="field">
+        <span>Note</span>
+        <input type="text" id="editNote" />
+      </label>
+
+      <button class="btn-add" id="markPaidBtn">Mark fully paid</button>
+      <div class="sheet__actions">
+        <button class="btn-ghost" id="deleteExpBtn">Delete</button>
+        <button class="btn-ghost" id="cancelEditBtn">Cancel</button>
+        <button class="btn-primary" id="saveEditBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confettiLayer" aria-hidden="true"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/currency.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
