@@ -34,6 +34,21 @@ html, body {
 }
 body { padding-bottom: calc(86px + var(--safe-bottom)); }
 
+/* Ambient alpine glow — gives the glass surfaces something real to blur. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(560px 400px at 88% -6%, rgba(123, 108, 246, .18), transparent 62%),
+    radial-gradient(500px 380px at -12% 22%, rgba(255, 157, 118, .15), transparent 60%),
+    radial-gradient(640px 480px at 55% 108%, rgba(20, 184, 166, .12), transparent 62%);
+}
+
+:focus-visible { outline: 2.5px solid var(--primary); outline-offset: 2px; }
+
 button { font-family: var(--font-body); cursor: pointer; }
 input, select { font-family: var(--font-body); color: var(--ink); }
 
@@ -46,9 +61,12 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   margin: calc(18px + var(--safe-top)) 4px 14px;
 }
 
-/* ---------- Cards ---------- */
+/* ---------- Cards (glass) ---------- */
 .card-soft {
-  background: var(--card);
+  background: rgba(255, 255, 255, .64);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, .65);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
@@ -241,7 +259,10 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 
 /* ---------- Category cards ---------- */
 .cat {
-  background: var(--card);
+  background: rgba(255, 255, 255, .64);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, .65);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 14px 16px;
@@ -274,12 +295,15 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 /* ---------- Ledger board ---------- */
 .lrow {
   display: flex; align-items: center; gap: 12px;
-  background: var(--card);
+  background: rgba(255, 255, 255, .64);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, .65);
   border-radius: 18px;
   box-shadow: var(--shadow);
   padding: 11px 14px;
   margin-bottom: 10px;
-  border: none; width: 100%; text-align: left;
+  width: 100%; text-align: left;
   transition: transform .15s ease;
 }
 .lrow:active { transform: scale(.98); }
@@ -412,6 +436,76 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
   100% { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)) scale(.6); opacity: 0; }
 }
+
+/* ---------- Rotating currency hero ---------- */
+.summary__code {
+  display: inline-block;
+  font-size: 10px; font-weight: 800;
+  background: var(--track);
+  color: var(--primary-deep);
+  border-radius: 999px;
+  padding: 2px 7px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+#totalCommitted, #totalLeft, .summary__code { transition: opacity .38s ease; }
+.fading { opacity: 0 !important; }
+
+/* ---------- Overspend ---------- */
+.bar__seg--over {
+  background: linear-gradient(135deg, #f0565b, #c62f34);
+  opacity: 1;
+  border-radius: 0 999px 999px 0;
+}
+.bar__tick {
+  position: absolute; top: -1px; bottom: -1px;
+  width: 2.5px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(30, 36, 77, .35);
+  z-index: 2;
+}
+
+/* ---------- Donut ---------- */
+.donut-card .card__title { margin-bottom: 4px; }
+.donut-wrap { position: relative; width: 210px; margin: 6px auto 2px; }
+.donut-wrap svg { width: 100%; height: auto; display: block; animation: donutIn .6s cubic-bezier(.22, 1, .36, 1); }
+@keyframes donutIn { from { opacity: 0; transform: rotate(-16deg) scale(.92); } to { opacity: 1; transform: none; } }
+.donut-seg {
+  fill: none;
+  stroke-width: 13;
+  cursor: pointer;
+  transition: stroke-width .2s ease, opacity .2s ease;
+}
+.donut-dimmed .donut-seg { opacity: .3; }
+.donut-dimmed .donut-seg.is-focus { opacity: 1; stroke-width: 17; }
+.donut-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; pointer-events: none;
+  padding: 0 34px;
+}
+.donut-center__ico { font-size: 22px; line-height: 1.2; }
+.donut-center__amt { font-family: var(--font-display); font-size: 21px; font-weight: 700; line-height: 1.15; }
+.donut-center__lbl { font-size: 11px; font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.donut-hint { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-soft); margin: 6px 0 0; opacity: .7; }
+
+/* ---------- Spend per day (Ledger) ---------- */
+.dc-head { display: flex; justify-content: space-between; align-items: baseline; }
+.dc-peak { font-size: 11.5px; font-weight: 800; color: var(--ink-soft); }
+.day-chart {
+  display: flex; align-items: flex-end; gap: 5px;
+  height: 76px; margin-top: 10px;
+}
+.day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.day__bar {
+  width: 100%;
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, var(--primary), var(--primary-deep));
+  min-height: 2px;
+  opacity: .9;
+}
+.day__bar.is-zero { background: var(--track); opacity: 1; }
+.day__lbl { font-size: 9px; font-weight: 700; color: var(--ink-soft); }
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {

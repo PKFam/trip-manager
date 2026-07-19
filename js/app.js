@@ -89,15 +89,6 @@ function iconBox(c, size) {
 }
 
 // ---------- gradient bar segments ----------
-function barSegs(budgetB, committedB, paidB, color) {
-  const pct = (x) => (budgetB > 0 ? Math.min((x / budgetB) * 100, 100) : (x > 0 ? 100 : 0));
-  const over = budgetB > 0 && committedB > budgetB;
-  const c = over ? 'var(--danger)' : color;
-  const grad = `linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 62%, #1e2440))`;
-  return `<div class="bar__seg bar__seg--committed" style="width:${pct(committedB)}%;background:${c}"></div>
-          <div class="bar__seg bar__seg--paid" style="width:${pct(paidB)}%;--seg-grad:${grad};background:${grad}"></div>`;
-}
-
 // ---------- count-up numbers ----------
 function setMoney(elm, baseAmount) {
   const target = Currency.fromBase(baseAmount, disp(), state.rates);
@@ -190,6 +181,29 @@ async function renderBrief() {
   }
 }
 
+// ---------- overspend-aware bar ----------
+// Within budget: bar scale = budget (classic fill).
+// Over budget: bar RESCALES so the full committed amount fits; a white tick
+// marks where the original budget ends, and only the chunk beyond it is red.
+function barSegs(budgetB, committedB, paidB, color) {
+  const over = committedB > budgetB;
+  const scale = Math.max(over ? committedB : budgetB, 0.0001);
+  const pct = (x) => Math.min(Math.max(x / scale, 0) * 100, 100);
+  const grad = `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 62%, #1e2440))`;
+  const inBudgetCommitted = Math.min(committedB, budgetB);
+  const inBudgetPaid = Math.min(paidB, budgetB);
+  let html = `
+    <div class="bar__seg bar__seg--committed" style="width:${pct(inBudgetCommitted)}%;background:${color}"></div>
+    <div class="bar__seg bar__seg--paid" style="width:${pct(inBudgetPaid)}%;background:${grad}"></div>`;
+  if (over) {
+    const edge = pct(budgetB);
+    html += `
+    <div class="bar__seg bar__seg--over" style="left:${edge}%;width:${pct(committedB) - edge}%"></div>
+    <div class="bar__tick" style="left:${edge}%"></div>`;
+  }
+  return html;
+}
+
 // ================= DASHBOARD =================
 function renderDashboard() {
   const t = buildTree();
@@ -200,13 +214,12 @@ function renderDashboard() {
   const totalPaid = t.roots.reduce((s, c) => s + t.paid[c.id], 0);
   const totalLeft = totalBudget - totalCommitted;
 
-  setMoney($('#totalCommitted'), totalCommitted);
-  setMoney($('#totalLeft'), totalLeft);
-  $('#totalLeft').classList.toggle('is-over', totalLeft < 0);
+  state.heroVals = { committed: totalCommitted, left: totalLeft };
+  renderHeroMoney(false);
   setMoney($('#statBudget'), totalBudget);
   setMoney($('#statPaid'), totalPaid);
   setMoney($('#statOutstanding'), totalCommitted - totalPaid);
-  $('#totalBar').innerHTML = barSegs(totalBudget, totalCommitted, totalPaid, 'var(--primary)');
+  $('#totalBar').innerHTML = barSegs(totalBudget, totalCommitted, totalPaid, '#5b7cfa');
 
   const list = $('#categoryList');
   list.innerHTML = '';
@@ -241,6 +254,8 @@ function renderDashboard() {
       renderDashboard();
     };
   });
+
+  renderDonut();
 }
 
 function renderSubs(parent, t) {
@@ -258,6 +273,104 @@ function renderSubs(parent, t) {
       </div>`;
   }
   return html + '</div>';
+}
+
+// ================= ROTATING CURRENCY HERO =================
+// The two hero numbers cycle through all currencies with a crossfade,
+// ~6s each, forever. The manual picker still rules the rest of the app.
+function renderHeroMoney(fade) {
+  if (!state.heroVals) return;
+  const codes = state.currencies.map((c) => c.code);
+  const code = (reducedMotion || !codes.length) ? disp() : codes[state.rotIdx % codes.length];
+  const els = [$('#totalCommitted'), $('#totalLeft'), $('#heroCurCode')];
+  const apply = () => {
+    const show = (v) => Currency.format(Math.round(Currency.fromBase(v, code, state.rates)), code, state.currencies);
+    $('#totalCommitted').textContent = show(state.heroVals.committed);
+    $('#totalLeft').textContent = show(state.heroVals.left);
+    $('#totalLeft').classList.toggle('is-over', state.heroVals.left < 0);
+    $('#heroCurCode').textContent = code;
+  };
+  if (!fade || reducedMotion) { apply(); return; }
+  els.forEach((n) => n.classList.add('fading'));
+  setTimeout(() => { apply(); els.forEach((n) => n.classList.remove('fading')); }, 380);
+}
+state.rotIdx = 0;
+setInterval(() => {
+  if (state.tab !== 'home' || reducedMotion || !state.heroVals) return;
+  state.rotIdx++;
+  renderHeroMoney(true);
+}, 6000);
+
+// ================= DONUT (breakdown) =================
+function renderDonut() {
+  const t = buildTree();
+  const data = t.roots.map((c) => ({ c, v: t.committed[c.id] })).filter((d) => d.v > 0);
+  const card = $('#donutCard');
+  if (data.length === 0) { card.hidden = true; return; }
+  card.hidden = false;
+
+  const total = data.reduce((s, d) => s + d.v, 0);
+  const R = 46, CIRC = 2 * Math.PI * R;
+  const gap = data.length > 1 ? 2.6 : 0;
+  let acc = 0, segs = '';
+  for (const d of data) {
+    const len = Math.max((d.v / total) * CIRC - gap, 1);
+    const focus = state.donutFocus === d.c.id ? 'is-focus' : '';
+    segs += `<circle class="donut-seg ${focus}" data-cat="${d.c.id}" cx="60" cy="60" r="${R}"
+      stroke="${d.c.color}" stroke-dasharray="${len} ${CIRC - len}" stroke-dashoffset="${-acc}"
+      transform="rotate(-90 60 60)"><title>${escapeHtml(d.c.name)}</title></circle>`;
+    acc += (d.v / total) * CIRC;
+  }
+  const svg = $('#donutSvg');
+  svg.innerHTML = segs;
+  svg.classList.toggle('donut-dimmed', !!state.donutFocus);
+
+  const center = $('#donutCenter');
+  const focused = data.find((d) => d.c.id === state.donutFocus);
+  if (focused) {
+    const pctOf = Math.round((focused.v / total) * 100);
+    center.innerHTML = `
+      <span class="donut-center__ico">${catIcon(focused.c)}</span>
+      <span class="donut-center__amt">${fmtBase(focused.v)}</span>
+      <span class="donut-center__lbl">${escapeHtml(focused.c.name)} · ${pctOf}%</span>`;
+  } else {
+    center.innerHTML = `
+      <span class="donut-center__amt">${fmtBase(total)}</span>
+      <span class="donut-center__lbl">committed</span>`;
+  }
+
+  svg.querySelectorAll('.donut-seg').forEach((n) => {
+    n.onclick = () => {
+      state.donutFocus = state.donutFocus === n.dataset.cat ? null : n.dataset.cat;
+      renderDonut();
+    };
+  });
+}
+
+// ================= SPEND PER DAY (Ledger) =================
+function renderDayChart() {
+  const card = $('#dayChartCard');
+  if (state.expenses.length < 2) { card.hidden = true; return; }
+  card.hidden = false;
+  const DAYS = 14;
+  const buckets = [];
+  const now = new Date();
+  for (let i = DAYS - 1; i >= 0; i--) {
+    const d = new Date(now); d.setDate(d.getDate() - i);
+    buckets.push({ key: d.toISOString().slice(0, 10), label: d.getDate(), v: 0 });
+  }
+  const map = Object.fromEntries(buckets.map((b) => [b.key, b]));
+  for (const e of state.expenses) {
+    const k = new Date(e.createdAt).toISOString().slice(0, 10);
+    if (map[k]) map[k].v += Number(e.baseAmount);
+  }
+  const max = Math.max(...buckets.map((b) => b.v), 1);
+  $('#dayChart').innerHTML = buckets.map((b) => `
+    <div class="day">
+      <div class="day__bar ${b.v === 0 ? 'is-zero' : ''}" style="height:${Math.max((b.v / max) * 100, 3)}%"></div>
+      <span class="day__lbl">${b.label}</span>
+    </div>`).join('');
+  $('#dayChartMax').textContent = 'peak ' + fmtBase(max);
 }
 
 // ================= QUICK ADD (inline on Home) =================
@@ -574,7 +687,7 @@ function switchTab(tab) {
   $('#settingsView').hidden = tab !== 'settings';
   document.querySelectorAll('.nav__btn').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === tab));
   if (tab === 'home') { renderHero(); renderQuickAdd(); renderDashboard(); renderBrief(); }
-  if (tab === 'ledger') renderLedger();
+  if (tab === 'ledger') { renderDayChart(); renderLedger(); }
   if (tab === 'settings') renderSettings();
   window.scrollTo({ top: 0 });
   // subtle enter animation on the newly shown view (retrigger by reflow)

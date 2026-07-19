@@ -82,7 +82,7 @@
       <div class="summary card-soft">
         <div class="summary__top">
           <div>
-            <div class="summary__label">Committed</div>
+            <div class="summary__label">Committed <span class="summary__code" id="heroCurCode">USD</span></div>
             <div class="summary__big" id="totalCommitted">$0</div>
           </div>
           <div class="summary__right">
@@ -105,6 +105,16 @@
         </div>
       </div>
 
+      <!-- Breakdown donut -->
+      <div class="card-soft donut-card" id="donutCard" hidden>
+        <div class="card__title">Breakdown</div>
+        <div class="donut-wrap">
+          <svg id="donutSvg" viewBox="0 0 120 120" role="img" aria-label="Spending by category"></svg>
+          <div class="donut-center" id="donutCenter"></div>
+        </div>
+        <p class="donut-hint">tap a slice</p>
+      </div>
+
       <!-- Category cards render here -->
       <div id="categoryList"></div>
     </section>
@@ -112,6 +122,13 @@
     <!-- ============ LEDGER ============ -->
     <section id="ledgerView" class="view" hidden>
       <h2 class="page-title">Ledger</h2>
+      <div class="card-soft" id="dayChartCard" hidden>
+        <div class="dc-head">
+          <span class="card__title">Spend per day</span>
+          <span class="dc-peak" id="dayChartMax"></span>
+        </div>
+        <div class="day-chart" id="dayChart"></div>
+      </div>
       <div class="ledger-empty card-soft" id="ledgerEmpty" hidden>
         <p>No transactions yet.<br/>Add your first expense from Home.</p>
       </div>
