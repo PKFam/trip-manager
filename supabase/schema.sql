@@ -76,6 +76,15 @@ create table if not exists itinerary (
   line text not null default ''
 );
 
+-- ---------- Grants: open the Data API door for signed-in users ----------
+-- The project was created with "Automatically expose new tables" OFF, so
+-- privileges must be granted explicitly or every query fails with
+-- "permission denied". RLS below still decides WHICH signed-in users get rows.
+grant usage on schema public to authenticated;
+grant all on all tables in schema public to authenticated;
+grant all on all sequences in schema public to authenticated;
+alter default privileges in schema public grant all on tables to authenticated;
+
 -- ---------- RLS: lock every table to the two trip members ----------
 alter table settings enable row level security;
 alter table currencies enable row level security;
