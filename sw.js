@@ -6,13 +6,16 @@
 // Goal 2: work offline. If the network is unreachable (mountain, plane, no
 //   signal), serve the last-known-good copy from the cache instead of failing.
 
-const CACHE = 'tripbudget-v1';
+const CACHE = 'tripbudget-v2';
 const CORE = [
   './',
   './index.html',
   './css/styles.css',
+  './js/util.js',
+  './js/supabase-client.js',
   './js/store.js',
   './js/currency.js',
+  './js/auth.js',
   './js/app.js',
   './manifest.json',
 ];

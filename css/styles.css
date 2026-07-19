@@ -507,6 +507,36 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 .day__bar.is-zero { background: var(--track); opacity: 1; }
 .day__lbl { font-size: 9px; font-weight: 700; color: var(--ink-soft); }
 
+/* ---------- Auth gate ---------- */
+.auth-gate {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(600px 460px at 85% -10%, rgba(123, 108, 246, .35), transparent 60%),
+    radial-gradient(560px 420px at 10% 15%, rgba(255, 157, 118, .28), transparent 60%),
+    linear-gradient(180deg, #1b2050, #2b3a8f 55%, #4a3f9e);
+}
+.auth-card {
+  width: 100%; max-width: 360px;
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, .6);
+  border-radius: 26px;
+  padding: 34px 26px;
+  text-align: center;
+  box-shadow: var(--shadow-lift);
+}
+.auth-card__art { font-size: 44px; margin-bottom: 6px; }
+.auth-card h1 { font-family: var(--font-display); font-size: 26px; margin: 4px 0 8px; }
+.auth-card p { color: var(--ink-soft); font-weight: 600; font-size: 14px; margin: 0 0 20px; }
+.auth-error { color: var(--danger) !important; font-weight: 700 !important; }
+.signed-in-as {
+  border: 1.5px solid var(--line); border-radius: 12px;
+  padding: 11px 12px; font-weight: 700; font-size: 14px;
+  background: var(--track);
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

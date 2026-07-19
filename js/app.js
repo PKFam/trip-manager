@@ -1,8 +1,5 @@
 // app.js — UI logic. Reads/writes only through Store; converts only through Currency.
-
-const $ = (sel) => document.querySelector(sel);
-const el = (tag, cls) => { const n = document.createElement(tag); if (cls) n.className = cls; return n; };
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// $, el, reducedMotion come from util.js (loaded first).
 
 const state = {
   settings: null,
@@ -418,7 +415,7 @@ async function addExpense() {
     categoryId: state.addCategoryId,
     amount, currency, baseAmount, paidAmount, paidBase,
     note: $('#expNote').value.trim(),
-    who: state.settings.whoAmI,
+    who: Auth.user.who,
   });
   $('#expAmount').value = '';
   $('#expNote').value = '';
@@ -534,11 +531,7 @@ async function saveEdit(overridePaid) {
 function renderSettings() {
   $('#setTripName').value = state.settings.tripName;
   $('#setTripDates').value = state.settings.tripDates || '';
-
-  const whoSel = $('#setWhoAmI');
-  whoSel.innerHTML = '';
-  for (const p of state.settings.people) { const o = el('option'); o.value = p; o.textContent = p; whoSel.appendChild(o); }
-  whoSel.value = state.settings.whoAmI;
+  $('#signedInAs').textContent = `${Auth.user.who} · ${Auth.user.email}`;
 
   const baseSel = $('#setBaseCurrency');
   baseSel.innerHTML = '';
@@ -745,7 +738,7 @@ function wireEvents() {
   // settings
   $('#setTripName').onchange = async (e) => { state.settings = await Store.saveSettings({ tripName: e.target.value }); };
   $('#setTripDates').onchange = async (e) => { state.settings = await Store.saveSettings({ tripDates: e.target.value }); };
-  $('#setWhoAmI').onchange = async (e) => { state.settings = await Store.saveSettings({ whoAmI: e.target.value }); };
+  $('#signOutBtn').onclick = () => Auth.signOut();
   $('#setBanner').onchange = (e) => { if (e.target.files[0]) handleBannerUpload(e.target.files[0]); };
   $('#clearBannerBtn').onclick = async () => {
     state.settings = await Store.saveSettings({ bannerImage: null });
@@ -768,17 +761,37 @@ function wireEvents() {
     await Store.saveRates({ ...state.rates, XXX: 1 });
     await loadAll(); renderRateEditor(); renderDisplayCurrencyOptions();
   };
-  $('#resetBtn').onclick = () => {
-    if (!confirm('Erase all categories, expenses and settings on this device?')) return;
-    Object.keys(localStorage).filter((x) => x.startsWith('tripbudget:')).forEach((x) => localStorage.removeItem(x));
-    location.reload();
-  };
 }
 
-(async function main() {
+let wired = false;
+let realtimeChannel = null;
+
+async function main() {
   await Store.init();
   await loadAll();
-  wireEvents();
+  if (!wired) { wireEvents(); wired = true; }
   renderDisplayCurrencyOptions();
-  switchTab('home');
-})();
+  switchTab(state.tab || 'home');
+  subscribeRealtime();
+}
+
+// Live sync: when Gil or Tammy's phone writes anywhere, both phones pick it
+// up within a second or two, no manual refresh.
+function subscribeRealtime() {
+  if (realtimeChannel) return; // already listening
+  realtimeChannel = sb.channel('trip-changes')
+    .on('postgres_changes', { event: '*', schema: 'public' }, debounce(async () => {
+      await loadAll();
+      if (state.tab === 'home') { renderQuickAdd(); renderDashboard(); }
+      if (state.tab === 'ledger') { renderDayChart(); renderLedger(); }
+      if (state.tab === 'settings') renderSettings();
+    }, 400))
+    .subscribe();
+}
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+window.main = main;
