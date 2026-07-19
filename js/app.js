@@ -736,38 +736,38 @@ function syncHalfFareRow() {
   if (!isCHF) $('#expHalfFare').checked = false;
 }
 
-// Two-step picker: main chips always; sub chips slide in only when the chosen
-// main has subs. "General" (= the main itself) is the default — subs optional.
+// Two-level picker with two distinct visual languages:
+// level 1 — a uniform grid of icon TILES (the big buckets);
+// level 2 — a PANEL attached beneath, tinted + edged in the chosen tile's
+// color, holding small radio-pills ("General" = the main itself, default).
 function renderCatPicker(wrapMain, wrapSub, getMain, setMain, getSub, setSub) {
   const rerender = () => renderCatPicker(wrapMain, wrapSub, getMain, setMain, getSub, setSub);
 
   wrapMain.innerHTML = '';
   for (const c of mainCategories()) {
-    const chip = el('button', 'chip' + (c.id === getMain() ? ' is-active' : ''));
-    chip.type = 'button';
-    chip.style.setProperty('--chip-c', c.color);
-    chip.innerHTML = `<span class="chip__ic">${catIcon(c)}</span>${escapeHtml(c.name)}`;
-    chip.onclick = () => { setMain(c.id); setSub(null); rerender(); };
-    wrapMain.appendChild(chip);
+    const tile = el('button', 'cat-tile' + (c.id === getMain() ? ' is-active' : ''));
+    tile.type = 'button';
+    tile.style.setProperty('--tc', c.color);
+    tile.innerHTML = `<span class="cat-tile__ic">${catIcon(c)}</span><span class="cat-tile__lbl">${escapeHtml(c.name)}</span>`;
+    tile.onclick = () => { setMain(c.id); setSub(null); rerender(); };
+    wrapMain.appendChild(tile);
   }
 
+  const parent = catById(getMain());
   const subs = subsOf(getMain());
   wrapSub.hidden = subs.length === 0;
   wrapSub.innerHTML = '';
   if (!subs.length) { setSub(null); return; }
-  const general = el('button', 'chip chip--sub' + (getSub() === null ? ' is-active' : ''));
-  general.type = 'button';
-  general.textContent = 'General';
-  general.onclick = () => { setSub(null); rerender(); };
-  wrapSub.appendChild(general);
-  for (const s of subs) {
-    const chip = el('button', 'chip chip--sub' + (s.id === getSub() ? ' is-active' : ''));
-    chip.type = 'button';
-    chip.style.setProperty('--chip-c', s.color);
-    chip.innerHTML = `<span class="chip__ic">${catIcon(s)}</span>${escapeHtml(s.name)}`;
-    chip.onclick = () => { setSub(s.id); rerender(); };
-    wrapSub.appendChild(chip);
-  }
+
+  wrapSub.style.setProperty('--pc', parent ? parent.color : '#5b7cfa');
+  const pills = [`<button type="button" class="sub-pill ${getSub() === null ? 'is-on' : ''}" data-sub="">General</button>`]
+    .concat(subs.map((s) => `<button type="button" class="sub-pill ${s.id === getSub() ? 'is-on' : ''}" data-sub="${s.id}">${catIcon(s)} ${escapeHtml(s.name)}</button>`));
+  wrapSub.innerHTML = `
+    <div class="sub-panel__head">${escapeHtml(parent ? parent.name : '')} · which kind? (optional)</div>
+    <div class="sub-panel__row">${pills.join('')}</div>`;
+  wrapSub.querySelectorAll('.sub-pill').forEach((b) => {
+    b.onclick = () => { setSub(b.dataset.sub || null); rerender(); };
+  });
 }
 
 function setQuickAddOpen(open) {
@@ -846,11 +846,13 @@ function renderLedger() {
   const empty = $('#ledgerEmpty');
   board.innerHTML = '';
   empty.hidden = state.expenses.length > 0;
+  $('#clearLedgerBtn').hidden = state.expenses.length === 0;
 
   for (const e of state.expenses) {
     const cat = catById(e.categoryId);
     const st = expenseStatus(e);
     const who = (e.who || '?')[0].toUpperCase();
+    const wrap = el('div', 'lwrap');
     const row = el('button', 'lrow');
     row.innerHTML = `
       ${iconBox(cat, 40)}
@@ -868,9 +870,70 @@ function renderLedger() {
           <span class="avatar avatar--${who === 'T' ? 't' : 'g'}">${who}</span>
         </span>
       </span>`;
-    row.onclick = () => openEditSheet(e.id);
-    board.appendChild(row);
+    const actions = el('div', 'lactions');
+    actions.innerHTML = `
+      <button type="button" class="lact-edit">✎<span>Edit</span></button>
+      <button type="button" class="lact-del">🗑<span>Delete</span></button>`;
+    wrap.appendChild(actions);
+    wrap.appendChild(row);
+    board.appendChild(wrap);
+
+    attachSwipe(wrap, row, e.id);
+    actions.querySelector('.lact-edit').onclick = () => { closeAllSwipes(); openEditSheet(e.id); };
+    actions.querySelector('.lact-del').onclick = async () => {
+      if (!confirm('Delete this transaction?')) return;
+      await Store.deleteExpense(e.id);
+      await loadAll(); renderDayChart(); renderLedger();
+    };
   }
+}
+
+// ---------- swipe-to-reveal (iOS-mail style: swipe left → Edit + Delete) ----------
+const SWIPE_W = 132;
+let openSwipe = null;
+function closeAllSwipes() {
+  if (openSwipe) { openSwipe.style.transform = ''; openSwipe = null; }
+}
+function attachSwipe(wrap, row, id) {
+  let startX = 0, startY = 0, dx = 0, dragging = false, horizontal = null, wasOpen = false;
+  row.addEventListener('pointerdown', (ev) => {
+    startX = ev.clientX; startY = ev.clientY; dx = 0; dragging = true; horizontal = null;
+    wasOpen = openSwipe === row;
+    row.style.transition = 'none';
+  });
+  row.addEventListener('pointermove', (ev) => {
+    if (!dragging) return;
+    const mx = ev.clientX - startX, my = ev.clientY - startY;
+    if (horizontal === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) horizontal = Math.abs(mx) > Math.abs(my);
+    if (!horizontal) return;
+    try { row.setPointerCapture(ev.pointerId); } catch (err) { /* capture is best-effort */ }
+    const base = wasOpen ? -SWIPE_W : 0;
+    dx = Math.min(0, Math.max(-SWIPE_W, base + mx));
+    row.style.transform = `translateX(${dx}px)`;
+  });
+  const finish = () => {
+    if (!dragging) return;
+    dragging = false;
+    row.style.transition = '';
+    const shouldOpen = dx < -SWIPE_W / 2;
+    if (shouldOpen) {
+      closeAllSwipes();
+      row.style.transform = `translateX(-${SWIPE_W}px)`;
+      openSwipe = row;
+    } else {
+      row.style.transform = '';
+      if (openSwipe === row) openSwipe = null;
+    }
+  };
+  row.addEventListener('pointerup', finish);
+  row.addEventListener('pointercancel', finish);
+  row.addEventListener('click', (ev) => {
+    if (horizontal) { // this click is the tail of a swipe — swallow it, keep the result
+      ev.preventDefault(); ev.stopPropagation(); horizontal = null; return;
+    }
+    if (wasOpen) { ev.preventDefault(); ev.stopPropagation(); closeAllSwipes(); return; } // tap an open row = close it
+    openEditSheet(id);
+  });
 }
 
 // ---------- edit sheet ----------
@@ -1123,6 +1186,15 @@ function wireEvents() {
   $('#addBtn').onclick = addExpense;
   $('#qaOpen').onclick = () => setQuickAddOpen(true);
   $('#qaClose').onclick = () => setQuickAddOpen(false);
+
+  $('#clearLedgerBtn').onclick = async () => {
+    const n = state.expenses.length;
+    if (!confirm(`Clear the ledger? All ${n} transactions will be deleted for both of you.`)) return;
+    if (!confirm('Are you sure? This cannot be undone.')) return;
+    await Store.clearExpenses();
+    await loadAll();
+    renderDayChart(); renderLedger();
+  };
   $('#paidSeg').querySelectorAll('button').forEach((btn) => {
     btn.onclick = () => {
       state.addMode = btn.dataset.mode;

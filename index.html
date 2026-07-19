@@ -86,8 +86,8 @@
           <select id="expCurrency" class="qa__cur" aria-label="Currency"></select>
           <button type="button" class="qa__close" id="qaClose" aria-label="Close">✕</button>
         </div>
-        <div class="chips" id="catChips"></div>
-        <div class="chips chips--sub" id="subChips" hidden></div>
+        <div class="cat-grid" id="catChips"></div>
+        <div class="sub-panel" id="subChips" hidden></div>
         <div class="qa__row qa__row--opts">
           <div class="seg" id="paidSeg">
             <button type="button" data-mode="paid" class="is-active">Paid</button>
@@ -173,6 +173,7 @@
         <p>No transactions yet.<br/>Add your first expense from Home.</p>
       </div>
       <div id="ledgerBoard"></div>
+      <button class="btn-danger" id="clearLedgerBtn" hidden>Clear ledger…</button>
     </section>
 
     <!-- ============ SETTINGS ============ -->
@@ -223,18 +224,21 @@
     </section>
   </main>
 
-  <!-- Bottom navigation -->
+  <!-- Bottom navigation — floating glass dock -->
   <nav class="nav" aria-label="Main" hidden>
     <button class="nav__btn is-active" data-tab="home" aria-label="Home">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <svg class="ico-line" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <svg class="ico-fill" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5.2v-6.2H9.2V21H4a1 1 0 0 1-1-1v-9.5Z" fill="currentColor"/></svg>
       <span>Home</span>
     </button>
     <button class="nav__btn" data-tab="ledger" aria-label="Ledger">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1.4" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="10" width="18" height="4" rx="1.4" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="16" width="18" height="4" rx="1.4" stroke="currentColor" stroke-width="1.8"/></svg>
+      <svg class="ico-line" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="4.4" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="9.8" width="18" height="4.4" rx="2" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15.6" width="18" height="4.4" rx="2" stroke="currentColor" stroke-width="1.8"/></svg>
+      <svg class="ico-fill" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="4.4" rx="2" fill="currentColor"/><rect x="3" y="9.8" width="18" height="4.4" rx="2" fill="currentColor"/><rect x="3" y="15.6" width="18" height="4.4" rx="2" fill="currentColor"/></svg>
       <span>Ledger</span>
     </button>
     <button class="nav__btn" data-tab="settings" aria-label="Settings">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.2 7.2 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg class="ico-line" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.2 7.2 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg class="ico-fill" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.2 7.2 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2Zm-7 3.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Z" fill="currentColor"/></svg>
       <span>Settings</span>
     </button>
   </nav>
@@ -249,8 +253,8 @@
         <input type="number" inputmode="decimal" id="editAmount" class="qa__amount" aria-label="Amount" />
         <select id="editCurrency" class="qa__cur" aria-label="Currency"></select>
       </div>
-      <div class="chips" id="editCatChips"></div>
-      <div class="chips chips--sub" id="editSubChips" hidden></div>
+      <div class="cat-grid" id="editCatChips"></div>
+      <div class="sub-panel" id="editSubChips" hidden></div>
       <label class="field">
         <span>Paid so far</span>
         <input type="number" inputmode="decimal" id="editPaid" />

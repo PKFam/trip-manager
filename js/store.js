@@ -93,6 +93,7 @@ async function applyOp(op) {
   if (t === 'expenses' && k === 'add') return ok(await sb.from('expenses').upsert(expToRow(d), { onConflict: 'id' }));
   if (t === 'expenses' && k === 'update') return ok(await sb.from('expenses').update(expPatchToRow(d.patch)).eq('id', d.id));
   if (t === 'expenses' && k === 'delete') return ok(await sb.from('expenses').delete().eq('id', d.id));
+  if (t === 'expenses' && k === 'clear') return ok(await sb.from('expenses').delete().not('id', 'is', null));
   if (t === 'withdrawals' && k === 'add') return ok(await sb.from('withdrawals').upsert({ id: d.id, amount: Number(d.amount), currency: d.currency, base_amount: Number(d.baseAmount), who: d.who || '', created_at: new Date(d.createdAt).toISOString() }, { onConflict: 'id' }));
   if (t === 'withdrawals' && k === 'delete') return ok(await sb.from('withdrawals').delete().eq('id', d.id));
   if (t === 'categories' && k === 'add') return ok(await sb.from('categories').upsert(catToRow(d), { onConflict: 'id' }));
@@ -272,6 +273,10 @@ const Store = {
   async deleteExpense(id) {
     M.set('expenses', M.get('expenses', []).filter((e) => e.id !== id));
     enqueue({ entity: 'expenses', kind: 'delete', data: { id } });
+  },
+  async clearExpenses() {
+    M.set('expenses', []);
+    enqueue({ entity: 'expenses', kind: 'clear', data: {} });
   },
 
   async getWithdrawals() { return M.get('withdrawals', []).slice().sort((a, b) => b.createdAt - a.createdAt); },
