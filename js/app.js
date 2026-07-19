@@ -12,7 +12,8 @@ const state = {
   addMode: 'paid',        // 'paid' | 'committed'
   expanded: null,         // Set of expanded parent category ids
   editingId: null,        // expense id open in the edit sheet
-  editCategoryId: null,
+  editMainId: null,
+  editSubId: null,
   tab: 'home',
 };
 
@@ -78,17 +79,14 @@ function buildTree() {
     }
   });
 
+  // Budgets live ONLY on main categories — a parent's budget is its own number.
+  // Spend rolls up: a parent's committed/paid = its direct expenses + its subs'.
   const budget = {}, committed = {}, paid = {};
   function calc(c) {
-    if (isLeaf(c)) {
-      budget[c.id] = Number(c.budget) || 0;
-      committed[c.id] = leafCommitted[c.id] || 0;
-      paid[c.id] = leafPaid[c.id] || 0;
-    } else {
-      let b = 0, cm = leafCommitted[c.id] || 0, pd = leafPaid[c.id] || 0;
-      childrenMap[c.id].forEach((ch) => { calc(ch); b += budget[ch.id]; cm += committed[ch.id]; pd += paid[ch.id]; });
-      budget[c.id] = b; committed[c.id] = cm; paid[c.id] = pd;
-    }
+    budget[c.id] = Number(c.budget) || 0;
+    let cm = leafCommitted[c.id] || 0, pd = leafPaid[c.id] || 0;
+    (childrenMap[c.id] || []).forEach((ch) => { calc(ch); cm += committed[ch.id]; pd += paid[ch.id]; });
+    committed[c.id] = cm; paid[c.id] = pd;
   }
   (childrenMap.__root || []).forEach(calc);
   const allRoots = childrenMap.__root || [];
@@ -122,10 +120,8 @@ function separateLeafIds() {
   return new Set(state.categories.filter((c) => sepRootIds.has(c.id) || sepRootIds.has(c.parentId)).map((c) => c.id));
 }
 
-function leafCategories() {
-  const parentIds = new Set(state.categories.filter((c) => c.parentId).map((c) => c.parentId));
-  return state.categories.filter((c) => !parentIds.has(c.id));
-}
+const mainCategories = () => state.categories.filter((c) => !c.parentId);
+const subsOf = (parentId) => state.categories.filter((c) => c.parentId === parentId);
 const catById = (id) => state.categories.find((c) => c.id === id);
 function catLabel(c) {
   if (!c) return '?';
@@ -573,18 +569,25 @@ async function saveCash() {
   renderDashboard();
 }
 
+// Subs have no budgets — they're a breakdown of the parent's spend.
+// Each row: amount + share of the parent's total, plus a slim share bar.
 function renderSubs(parent, t) {
   const kids = t.childrenMap[parent.id] || [];
+  const parentCm = t.committed[parent.id];
+  const kidsCm = kids.reduce((s, k) => s + t.committed[k.id], 0);
+  const generalCm = Math.max(parentCm - kidsCm, 0); // logged straight to the main
+  const rows = kids.map((k) => ({ name: k.name, icon: catIcon(k), color: k.color, cm: t.committed[k.id] }));
+  if (generalCm > 0.005 && kids.length) rows.push({ name: 'General', icon: '·', color: parent.color, cm: generalCm });
   let html = '<div class="subs">';
-  for (const k of kids) {
-    const b = t.budget[k.id], cm = t.committed[k.id], pd = t.paid[k.id];
+  for (const r of rows) {
+    const share = parentCm > 0 ? (r.cm / parentCm) * 100 : 0;
     html += `
       <div class="sub">
         <div class="sub__head">
-          <span class="sub__name">${iconBox(k, 22)}${escapeHtml(k.name)}</span>
-          <span class="sub__nums"><b>${fmtBase(cm)}</b> / ${fmtBase(b)}</span>
+          <span class="sub__name"><span class="sub__dot" style="background:${r.color}"></span>${r.icon !== '·' ? r.icon + ' ' : ''}${escapeHtml(r.name)}</span>
+          <span class="sub__nums"><b>${fmtBase(r.cm)}</b> · ${Math.round(share)}%</span>
         </div>
-        <div class="bar">${barSegs(b, cm, pd, k.color)}</div>
+        <div class="sub__share"><i style="width:${share}%;background:${r.color}"></i></div>
       </div>`;
   }
   return html + '</div>';
@@ -709,18 +712,21 @@ function renderDayChart() {
   $('#dayChartMax').textContent = 'peak ' + fmtBase(max);
 }
 
-// ================= QUICK ADD (inline on Home) =================
+// ================= QUICK ADD (inline on Home, collapsed by default) =================
 function renderQuickAdd() {
-  const leaves = leafCategories();
-  if (!state.addCategoryId || !leaves.find((c) => c.id === state.addCategoryId)) {
-    state.addCategoryId = leaves[0]?.id || null;
+  const mains = mainCategories();
+  if (!state.addMainId || !mains.find((c) => c.id === state.addMainId)) {
+    state.addMainId = mains[0]?.id || null;
+    state.addSubId = null;
   }
   const curSel = $('#expCurrency');
   curSel.innerHTML = '';
   for (const c of state.currencies) { const o = el('option'); o.value = c.code; o.textContent = c.code; curSel.appendChild(o); }
   curSel.value = state.currencies.find((c) => c.code === disp()) ? disp() : state.settings.baseCurrency;
   syncHalfFareRow();
-  renderChips($('#catChips'), () => state.addCategoryId, (id) => { state.addCategoryId = id; });
+  renderCatPicker($('#catChips'), $('#subChips'),
+    () => state.addMainId, (id) => { state.addMainId = id; },
+    () => state.addSubId, (id) => { state.addSubId = id; });
 }
 
 // the ½-fare checkbox only makes sense for Swiss (CHF) purchases
@@ -730,22 +736,51 @@ function syncHalfFareRow() {
   if (!isCHF) $('#expHalfFare').checked = false;
 }
 
-function renderChips(wrap, getSel, setSel) {
-  wrap.innerHTML = '';
-  for (const c of leafCategories()) {
-    const chip = el('button', 'chip' + (c.id === getSel() ? ' is-active' : ''));
+// Two-step picker: main chips always; sub chips slide in only when the chosen
+// main has subs. "General" (= the main itself) is the default — subs optional.
+function renderCatPicker(wrapMain, wrapSub, getMain, setMain, getSub, setSub) {
+  const rerender = () => renderCatPicker(wrapMain, wrapSub, getMain, setMain, getSub, setSub);
+
+  wrapMain.innerHTML = '';
+  for (const c of mainCategories()) {
+    const chip = el('button', 'chip' + (c.id === getMain() ? ' is-active' : ''));
     chip.type = 'button';
     chip.style.setProperty('--chip-c', c.color);
-    chip.innerHTML = `<span class="chip__ic">${catIcon(c)}</span>${escapeHtml(catLabel(c))}`;
-    chip.onclick = () => { setSel(c.id); renderChips(wrap, getSel, setSel); };
-    wrap.appendChild(chip);
+    chip.innerHTML = `<span class="chip__ic">${catIcon(c)}</span>${escapeHtml(c.name)}`;
+    chip.onclick = () => { setMain(c.id); setSub(null); rerender(); };
+    wrapMain.appendChild(chip);
   }
+
+  const subs = subsOf(getMain());
+  wrapSub.hidden = subs.length === 0;
+  wrapSub.innerHTML = '';
+  if (!subs.length) { setSub(null); return; }
+  const general = el('button', 'chip chip--sub' + (getSub() === null ? ' is-active' : ''));
+  general.type = 'button';
+  general.textContent = 'General';
+  general.onclick = () => { setSub(null); rerender(); };
+  wrapSub.appendChild(general);
+  for (const s of subs) {
+    const chip = el('button', 'chip chip--sub' + (s.id === getSub() ? ' is-active' : ''));
+    chip.type = 'button';
+    chip.style.setProperty('--chip-c', s.color);
+    chip.innerHTML = `<span class="chip__ic">${catIcon(s)}</span>${escapeHtml(s.name)}`;
+    chip.onclick = () => { setSub(s.id); rerender(); };
+    wrapSub.appendChild(chip);
+  }
+}
+
+function setQuickAddOpen(open) {
+  $('#qaOpen').hidden = open;
+  $('#qaBody').hidden = !open;
+  if (open) setTimeout(() => $('#expAmount').focus(), 60);
 }
 
 async function addExpense() {
   const amount = parseFloat($('#expAmount').value);
   if (!amount || amount <= 0) { $('#expAmount').focus(); return; }
-  if (!state.addCategoryId) return;
+  const categoryId = state.addSubId || state.addMainId; // sub optional — main is a valid target
+  if (!categoryId) return;
   const currency = $('#expCurrency').value;
   const baseAmount = Currency.toBase(amount, currency, state.rates);
 
@@ -757,9 +792,9 @@ async function addExpense() {
     paidBase = Currency.toBase(paidAmount, currency, state.rates);
   }
 
-  const cat = catById(state.addCategoryId);
+  const cat = catById(categoryId);
   await Store.addExpense({
-    categoryId: state.addCategoryId,
+    categoryId,
     amount, currency, baseAmount, paidAmount, paidBase,
     note: $('#expNote').value.trim(),
     who: Auth.user.who,
@@ -773,6 +808,7 @@ async function addExpense() {
   await loadAll();
   renderDashboard();
   confettiBurst($('#addBtn'), cat ? cat.color : '#5b7cfa');
+  setQuickAddOpen(false); // tuck the form away after a successful add
 }
 
 // ================= CONFETTI =================
@@ -842,8 +878,10 @@ function openEditSheet(id) {
   const e = state.expenses.find((x) => x.id === id);
   if (!e) return;
   state.editingId = id;
-  state.editCategoryId = e.categoryId;
-  $('#editTitle').textContent = 'Edit — ' + (e.note || catLabel(catById(e.categoryId)));
+  const cat = catById(e.categoryId);
+  state.editMainId = cat && cat.parentId ? cat.parentId : e.categoryId;
+  state.editSubId = cat && cat.parentId ? cat.id : null;
+  $('#editTitle').textContent = 'Edit — ' + (e.note || catLabel(cat));
   $('#editAmount').value = e.amount;
   $('#editPaid').value = e.paidAmount;
   $('#editNote').value = e.note;
@@ -855,7 +893,9 @@ function openEditSheet(id) {
   curSel.innerHTML = '';
   for (const c of state.currencies) { const o = el('option'); o.value = c.code; o.textContent = c.code; curSel.appendChild(o); }
   curSel.value = e.currency;
-  renderChips($('#editCatChips'), () => state.editCategoryId, (cid) => { state.editCategoryId = cid; });
+  renderCatPicker($('#editCatChips'), $('#editSubChips'),
+    () => state.editMainId, (cid) => { state.editMainId = cid; },
+    () => state.editSubId, (cid) => { state.editSubId = cid; });
   $('#editSheet').hidden = false;
 }
 
@@ -874,7 +914,7 @@ async function saveEdit(overridePaid) {
     baseAmount: Currency.toBase(amount, currency, state.rates),
     paidAmount,
     paidBase: Currency.toBase(paidAmount, currency, state.rates),
-    categoryId: state.editCategoryId,
+    categoryId: state.editSubId || state.editMainId,
     note: $('#editNote').value.trim(),
     payMethod: state.editPay || 'card',
     halfFare: currency === 'CHF' && $('#editHalfFare').checked,
@@ -910,22 +950,22 @@ function renderCatEditor() {
   for (const top of tops) {
     const kids = childrenMap[top.id] || [];
     const group = el('div', 'cat-group');
+    // budgets live on mains — always editable here
     const prow = el('div', 'edit-row');
     prow.innerHTML = `
       <input type="text" class="ico-input" value="${escapeAttr(top.icon || '')}" data-id="${top.id}" data-f="icon" maxlength="3" aria-label="Emoji" />
       <input type="color" value="${top.color}" data-id="${top.id}" data-f="color" />
       <input type="text" value="${escapeAttr(top.name)}" data-id="${top.id}" data-f="name" />
-      ${kids.length ? '' : `<input type="number" value="${top.budget}" data-id="${top.id}" data-f="budget" inputmode="decimal" />`}
+      <input type="number" value="${top.budget}" data-id="${top.id}" data-f="budget" inputmode="decimal" />
       <button class="del" data-del="${top.id}" aria-label="Delete category">✕</button>`;
     group.appendChild(prow);
 
+    // subs: name + icon only — no budget (they're granularity, not envelopes)
     for (const kid of kids) {
       const krow = el('div', 'edit-row is-sub');
       krow.innerHTML = `
         <input type="text" class="ico-input" value="${escapeAttr(kid.icon || '')}" data-id="${kid.id}" data-f="icon" maxlength="3" aria-label="Emoji" />
-        <input type="color" value="${kid.color}" data-id="${kid.id}" data-f="color" />
         <input type="text" value="${escapeAttr(kid.name)}" data-id="${kid.id}" data-f="name" />
-        <input type="number" value="${kid.budget}" data-id="${kid.id}" data-f="budget" inputmode="decimal" />
         <button class="del" data-del="${kid.id}" aria-label="Delete subcategory">✕</button>`;
       group.appendChild(krow);
     }
@@ -1081,6 +1121,8 @@ function wireEvents() {
   document.querySelectorAll('.nav__btn').forEach((b) => { b.onclick = () => switchTab(b.dataset.tab); });
 
   $('#addBtn').onclick = addExpense;
+  $('#qaOpen').onclick = () => setQuickAddOpen(true);
+  $('#qaClose').onclick = () => setQuickAddOpen(false);
   $('#paidSeg').querySelectorAll('button').forEach((btn) => {
     btn.onclick = () => {
       state.addMode = btn.dataset.mode;

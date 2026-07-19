@@ -141,6 +141,28 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 
 /* ---------- Quick add ---------- */
 .qa { padding: 14px; }
+.qa__open {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; background: transparent;
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 600;
+  color: var(--primary-deep);
+  padding: 6px 0;
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.qa__open:active { transform: scale(.97); }
+#qaBody { animation: rise .3s cubic-bezier(.22, 1, .36, 1); }
+.qa__close {
+  border: none; background: var(--track);
+  color: var(--ink-soft);
+  width: 34px; height: 34px; border-radius: 10px;
+  font-size: 14px; font-weight: 800;
+  flex: none; cursor: pointer;
+}
+.chips--sub { margin-top: -4px; padding-left: 6px; }
+.chips--sub .chip { padding: 7px 12px; font-size: 12.5px; }
 .qa__row { display: flex; gap: 10px; align-items: center; }
 .qa__row--opts { margin-top: 4px; }
 .qa__amount {
@@ -304,6 +326,13 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 .sub__nums { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .sub__nums b { color: var(--ink); }
 .sub .bar { height: 8px; margin-top: 6px; }
+.sub__share {
+  position: relative; height: 5px;
+  background: var(--track);
+  border-radius: 999px; overflow: hidden;
+  margin-top: 5px;
+}
+.sub__share i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; opacity: .75; transition: width var(--t-spring); }
 
 /* ---------- Ledger board ---------- */
 .lrow {

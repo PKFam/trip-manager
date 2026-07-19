@@ -74,13 +74,20 @@
         <div class="brief__text" id="briefText"></div>
       </div>
 
-      <!-- Inline quick add -->
+      <!-- Inline quick add (collapsed until tapped) -->
       <div class="qa card-soft">
+        <button type="button" class="qa__open" id="qaOpen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+          Add expense
+        </button>
+        <div id="qaBody" hidden>
         <div class="qa__row">
           <input type="number" inputmode="decimal" id="expAmount" class="qa__amount" placeholder="0" aria-label="Amount" />
           <select id="expCurrency" class="qa__cur" aria-label="Currency"></select>
+          <button type="button" class="qa__close" id="qaClose" aria-label="Close">✕</button>
         </div>
         <div class="chips" id="catChips"></div>
+        <div class="chips chips--sub" id="subChips" hidden></div>
         <div class="qa__row qa__row--opts">
           <div class="seg" id="paidSeg">
             <button type="button" data-mode="paid" class="is-active">Paid</button>
@@ -105,6 +112,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
           Add expense
         </button>
+        </div><!-- /qaBody -->
       </div>
 
       <!-- Summary -->
@@ -242,6 +250,7 @@
         <select id="editCurrency" class="qa__cur" aria-label="Currency"></select>
       </div>
       <div class="chips" id="editCatChips"></div>
+      <div class="chips chips--sub" id="editSubChips" hidden></div>
       <label class="field">
         <span>Paid so far</span>
         <input type="number" inputmode="decimal" id="editPaid" />
