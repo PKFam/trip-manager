@@ -789,7 +789,7 @@ function subscribeRealtime() {
   realtimeChannel = sb.channel('trip-changes')
     .on('postgres_changes', { event: '*', schema: 'public' }, debounce(async () => {
       await loadAll();
-      if (state.tab === 'home') { renderQuickAdd(); renderDashboard(); }
+      if (state.tab === 'home') { renderHero(); renderBrief(); renderQuickAdd(); renderDashboard(); }
       if (state.tab === 'ledger') { renderDayChart(); renderLedger(); }
       if (state.tab === 'settings') renderSettings();
     }, 400))
