@@ -105,3 +105,10 @@ begin
     );
   end loop;
 end $$;
+
+-- ---------- Realtime: broadcast changes so both phones live-sync ----------
+-- Tables are NOT broadcast by default; without this, the app's realtime
+-- subscription listens on a channel the database never speaks on (data saves
+-- fine but the other device only sees it after a manual refresh).
+alter publication supabase_realtime
+  add table settings, currencies, rates, categories, expenses, itinerary;
