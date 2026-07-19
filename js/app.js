@@ -166,66 +166,111 @@ function setMoney(elm, baseAmount) {
 // ================= HERO + BRIEF =================
 // Illustrated banner scenes — one per trip context, all in the same layered
 // alpine style. The scene follows the itinerary automatically.
+// Every scene shares one grammar: a dusk sky, a soft glow, a hazed far range,
+// a held mid ridge, a grounded near slope, then one scene-specific subject.
+// Atmospheric perspective (distant = lighter/cooler) does the heavy lifting.
+const HERO_DEFS = `<defs>
+  <linearGradient id="sky-warm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbb98f"/><stop offset=".5" stop-color="#8f7ae0"/><stop offset="1" stop-color="#2c3573"/></linearGradient>
+  <linearGradient id="sky-night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#141a3d"/><stop offset=".58" stop-color="#454399"/><stop offset="1" stop-color="#d081a0"/></linearGradient>
+  <linearGradient id="sky-day" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7db8e6"/><stop offset="1" stop-color="#e7dcc4"/></linearGradient>
+  <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff5d8" stop-opacity=".55"/><stop offset="1" stop-color="#fff5d8" stop-opacity="0"/></radialGradient>
+</defs>`;
+const svg = (inner) => `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">${HERO_DEFS}${inner}</svg>`;
+// haze band that sits along the horizon and separates the depth layers
+const HAZE = `<rect x="0" y="96" width="375" height="30" fill="url(#haze)"/>`;
+
 const HERO_SCENES = {
-  alps: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9d76"/><stop offset=".55" stop-color="#7b6cf6"/><stop offset="1" stop-color="#2b3a8f"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-a)"/><circle cx="300" cy="42" r="20" fill="#ffe3a3" opacity=".9"/>
-    <path d="M0 160 L70 70 L110 120 L160 55 L215 160 Z" fill="#33408f"/><path d="M120 160 L200 80 L245 125 L300 65 L375 160 Z" fill="#4a53b8"/>
-    <path d="M160 55 L175 75 L145 75 Z" fill="#e9edff"/><path d="M300 65 L313 83 L286 83 Z" fill="#e9edff"/></svg>`,
-  flight: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#141a3d"/><stop offset=".6" stop-color="#3d3f8f"/><stop offset="1" stop-color="#c76b8f"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-f)"/>
-    <circle cx="52" cy="34" r="1.6" fill="#fff" opacity=".9"/><circle cx="120" cy="20" r="1.2" fill="#fff" opacity=".7"/><circle cx="210" cy="30" r="1.4" fill="#fff" opacity=".8"/><circle cx="330" cy="18" r="1.3" fill="#fff" opacity=".7"/><circle cx="285" cy="48" r="1.1" fill="#fff" opacity=".6"/>
-    <circle cx="252" cy="28" r="13" fill="#f4ecd7" opacity=".95"/><circle cx="247" cy="25" r="3.4" fill="#e2d6ba" opacity=".7"/>
-    <path d="M175 60 h56 M189 60 l18 -10 h9 l-10 10 M189 60 l18 8 h9 l-10 -8 M175 60 l-7 -5 h6" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" fill="none" opacity=".95"/>
-    <path d="M60 62 q55 -4 108 -2" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity=".35" stroke-dasharray="2 9"/>
-    <ellipse cx="60" cy="150" rx="90" ry="22" fill="#e9e4f4" opacity=".85"/><ellipse cx="190" cy="158" rx="110" ry="24" fill="#ded7ef" opacity=".9"/><ellipse cx="330" cy="150" rx="100" ry="22" fill="#e9e4f4" opacity=".85"/></svg>`,
-  drive: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd0f2"/><stop offset="1" stop-color="#d9ecf8"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-d)"/><circle cx="60" cy="36" r="17" fill="#fff3c4" opacity=".95"/>
-    <path d="M0 160 L90 62 L150 118 L215 48 L290 160 Z" fill="#5b78b8"/><path d="M215 48 L232 72 L196 72 Z" fill="#f0f5ff"/>
-    <path d="M180 160 L280 84 L375 148 L375 160 Z" fill="#7b93cc"/>
-    <path d="M150 160 C 190 130 150 112 205 96 C 240 86 250 78 262 66" stroke="#3c4666" stroke-width="16" fill="none" stroke-linecap="round"/>
-    <path d="M150 160 C 190 130 150 112 205 96 C 240 86 250 78 262 66" stroke="#f4f3ef" stroke-width="2" fill="none" stroke-dasharray="7 8"/></svg>`,
-  russbach: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ed8ef"/><stop offset="1" stop-color="#fdf1cf"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-r)"/><circle cx="315" cy="34" r="16" fill="#fff3c4"/>
-    <path d="M0 160 L80 78 L170 160 Z" fill="#8fb886" opacity=".7"/><path d="M170 160 L260 70 L375 160 Z" fill="#7aa873" opacity=".8"/>
-    <path d="M0 160 Q95 128 190 146 Q290 162 375 140 L375 160 L0 160 Z" fill="#8fc07f"/>
-    <rect x="176" y="104" width="26" height="26" fill="#fdfbf4"/><path d="M172 104 L189 88 L206 104 Z" fill="#b5651d"/>
-    <rect x="186" y="70" width="9" height="34" fill="#fdfbf4"/><path d="M186 70 q4.5 -12 9 0 Z" fill="#3c4666"/><circle cx="190.5" cy="64" r="3.2" fill="#3c4666"/>
-    <rect x="238" y="116" width="22" height="18" fill="#f4e6cf"/><path d="M234 116 L249 104 L264 116 Z" fill="#8a5a2b"/>
-    <path d="M120 132 l7 -16 l7 16 Z M136 134 l6 -13 l6 13 Z" fill="#3e7a4f"/></svg>`,
-  glockner: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b2f6e"/><stop offset=".6" stop-color="#8f5aa8"/><stop offset="1" stop-color="#e88ca0"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-g)"/><circle cx="70" cy="40" r="15" fill="#ffe0ee" opacity=".9"/>
-    <path d="M0 160 L95 34 L150 108 L205 22 L300 160 Z" fill="#2c2752"/><path d="M205 22 L226 54 L182 54 Z" fill="#f4eefc"/><path d="M95 34 L110 58 L79 58 Z" fill="#f4eefc"/>
-    <path d="M230 160 L310 70 L375 132 L375 160 Z" fill="#413a6e"/><path d="M310 70 L322 88 L297 88 Z" fill="#f4eefc"/>
-    <path d="M40 160 C 90 150 60 138 120 132 C 170 127 150 118 190 112" stroke="#1c1838" stroke-width="7" fill="none" stroke-linecap="round" opacity=".8"/></svg>`,
-  stubai: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fc6e8"/><stop offset="1" stop-color="#e8f4ec"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-s)"/><circle cx="322" cy="34" r="16" fill="#fff6d8"/>
-    <path d="M0 160 L60 50 L140 160 Z" fill="#5f7fbf"/><path d="M60 50 L76 78 L43 78 Z" fill="#eef6ff"/>
-    <path d="M235 160 L315 44 L375 160 Z" fill="#6b8ac9"/><path d="M315 44 L330 72 L299 72 Z" fill="#eef6ff"/>
-    <path d="M120 160 L187 66 L255 160 Z" fill="#dcecf8"/><path d="M187 66 L214 106 L160 106 Z" fill="#fff"/>
-    <path d="M180 160 Q186 128 187 106" stroke="#8fd0e8" stroke-width="5" fill="none" stroke-linecap="round"/>
-    <path d="M0 160 Q100 148 375 154 L375 160 Z" fill="#93c78b"/></svg>`,
-  grindelwald: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6db3e8"/><stop offset="1" stop-color="#d6ecdc"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-w)"/><circle cx="52" cy="34" r="15" fill="#fff6d8"/>
-    <path d="M130 160 L235 18 L340 160 Z" fill="#4a4f66"/><path d="M235 18 L268 66 L235 66 L252 96 L206 96 L222 66 L202 66 Z" fill="#f5f7fa"/>
-    <path d="M0 160 L85 74 L180 160 Z" fill="#67932f" opacity=".55"/><path d="M270 160 L330 96 L375 138 L375 160 Z" fill="#5b78b8" opacity=".7"/>
-    <path d="M0 160 Q120 142 375 150 L375 160 Z" fill="#7fbb6e"/>
-    <rect x="80" y="126" width="24" height="20" fill="#f4e6cf"/><path d="M75 126 L92 110 L109 126 Z" fill="#7a4a22"/>
-    <rect x="130" y="134" width="18" height="14" fill="#f4e6cf"/><path d="M126 134 L139 122 L152 134 Z" fill="#8a5a2b"/></svg>`,
-  munich: `<svg class="hero__mountains" viewBox="0 0 375 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs><linearGradient id="hs-m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2d5e"/><stop offset=".65" stop-color="#7a5a9e"/><stop offset="1" stop-color="#f2a06b"/></linearGradient></defs>
-    <rect width="375" height="160" fill="url(#hs-m)"/><circle cx="60" cy="38" r="14" fill="#ffe8c4" opacity=".95"/>
-    <path d="M0 160 V120 h30 v-14 h22 v14 h24 V96 h34 v64 Z" fill="#242647"/>
-    <rect x="150" y="74" width="17" height="86" fill="#2c2e54"/><path d="M150 74 q8.5 -16 17 0 Z" fill="#3a3d6b"/><circle cx="158.5" cy="56" r="5" fill="#3a3d6b"/>
-    <rect x="176" y="74" width="17" height="86" fill="#2c2e54"/><path d="M176 74 q8.5 -16 17 0 Z" fill="#3a3d6b"/><circle cx="184.5" cy="56" r="5" fill="#3a3d6b"/>
-    <path d="M205 160 V110 h28 v-18 h20 v18 h26 v50 Z" fill="#242647"/><path d="M290 160 V126 h40 v-20 h24 v54 Z" fill="#2c2e54"/>
-    <g fill="#ffd98a" opacity=".9"><rect x="10" y="128" width="3.5" height="5"/><rect x="40" y="116" width="3.5" height="5"/><rect x="62" y="130" width="3.5" height="5"/><rect x="214" y="120" width="3.5" height="5"/><rect x="240" y="102" width="3.5" height="5"/><rect x="300" y="134" width="3.5" height="5"/><rect x="340" y="116" width="3.5" height="5"/><rect x="155" y="92" width="3" height="5"/><rect x="181" y="100" width="3" height="5"/></g></svg>`,
+  alps: svg(`
+    <rect width="375" height="160" fill="url(#sky-warm)"/>
+    <circle cx="292" cy="46" r="60" fill="url(#glow)" transform="translate(292 46)"/><circle cx="292" cy="46" r="15" fill="#ffe9b8"/>
+    <path d="M0 160 L60 96 L120 132 L190 88 L250 128 L320 100 L375 138 L375 160 Z" fill="#6f77c4" opacity=".45"/>
+    ${HAZE}
+    <path d="M0 160 L95 70 L150 118 L215 62 L300 120 L375 92 L375 160 Z" fill="#3f4894"/>
+    <path d="M215 62 L233 88 L197 88 Z" fill="#eef1ff"/><path d="M215 62 L215 88 L197 88 Z" fill="#c9cff0"/>
+    <path d="M95 70 L110 92 L80 92 Z" fill="#eef1ff"/>
+    <path d="M0 160 L70 112 L140 150 L210 118 L290 152 L375 126 L375 160 Z" fill="#272c63"/>`),
+
+  flight: svg(`
+    <rect width="375" height="160" fill="url(#sky-night)"/>
+    <g fill="#fff"><circle cx="40" cy="26" r="1.5" opacity=".9"/><circle cx="96" cy="16" r="1" opacity=".6"/><circle cx="150" cy="30" r="1.2" opacity=".7"/><circle cx="205" cy="18" r="1.4" opacity=".85"/><circle cx="270" cy="34" r="1" opacity=".6"/><circle cx="320" cy="22" r="1.3" opacity=".75"/><circle cx="352" cy="40" r="1" opacity=".55"/></g>
+    <circle cx="250" cy="30" r="46" fill="url(#glow)" transform="translate(250 30)"/><circle cx="250" cy="30" r="12" fill="#f3ead2"/><circle cx="245" cy="27" r="3.2" fill="#dccdae" opacity=".7"/>
+    <path d="M64 60 q54 -5 104 -3" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".32" stroke-dasharray="1.5 9"/>
+    <path d="M172 60 h54 M186 60 l17 -10 h9 l-10 10 M186 60 l17 9 h9 l-10 -9 M172 60 l-7 -5 h6" stroke="#fff" stroke-width="4.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+    <path d="M0 160 L80 118 L150 146 L230 116 L310 148 L375 122 L375 160 Z" fill="#3a3f7e" opacity=".7"/>
+    ${HAZE}
+    <path d="M0 160 L90 128 L180 156 L270 126 L375 150 L375 160 Z" fill="#242a55"/>`),
+
+  drive: svg(`
+    <rect width="375" height="160" fill="url(#sky-day)"/>
+    <circle cx="58" cy="40" r="40" fill="url(#glow)" transform="translate(58 40)"/><circle cx="58" cy="40" r="15" fill="#fff2be"/>
+    <path d="M0 160 L100 60 L160 118 L225 50 L300 108 L375 74 L375 160 Z" fill="#7f9bce" opacity=".55"/>
+    <path d="M225 50 L243 78 L207 78 Z" fill="#f2f6ff"/>
+    ${HAZE}
+    <path d="M0 160 L110 96 L200 140 L300 104 L375 132 L375 160 Z" fill="#516aa8"/>
+    <path d="M150 160 C 196 128 150 110 212 96 C 250 87 258 78 270 64" stroke="#2f3a5c" stroke-width="15" fill="none" stroke-linecap="round"/>
+    <path d="M150 160 C 196 128 150 110 212 96 C 250 87 258 78 270 64" stroke="#f4f3ef" stroke-width="1.8" fill="none" stroke-dasharray="6 8" opacity=".9"/>
+    <path d="M0 160 Q120 150 375 156 L375 160 Z" fill="#3a4f7a" opacity=".55"/>`),
+
+  russbach: svg(`
+    <rect width="375" height="160" fill="url(#sky-day)"/>
+    <circle cx="312" cy="36" r="38" fill="url(#glow)" transform="translate(312 36)"/><circle cx="312" cy="36" r="14" fill="#fff2be"/>
+    <path d="M0 160 L70 84 L150 132 L230 74 L320 120 L375 96 L375 160 Z" fill="#8aa6b0" opacity=".5"/>
+    <path d="M230 74 L246 98 L214 98 Z" fill="#eef4f8"/>
+    ${HAZE}
+    <path d="M0 160 Q95 118 210 138 Q300 154 375 128 L375 160 Z" fill="#7bad6b"/>
+    <path d="M0 160 Q120 150 375 150 L375 160 Z" fill="#5f9455"/>
+    <g><rect x="177" y="106" width="25" height="26" fill="#fbf8f0"/><path d="M173 106 L189.5 90 L206 106 Z" fill="#a75a26"/>
+      <rect x="185.5" y="72" width="8" height="34" fill="#fbf8f0"/><path d="M185.5 72 q4 -11 8 0 Z" fill="#2f3a5c"/><circle cx="189.5" cy="66" r="3" fill="#2f3a5c"/></g>
+    <rect x="238" y="118" width="21" height="17" fill="#efe0c8"/><path d="M234 118 L248.5 106 L263 118 Z" fill="#7a4a22"/>
+    <g fill="#3e7a4f"><path d="M120 134 l7 -17 l7 17 Z"/><path d="M136 136 l6 -14 l6 14 Z"/><path d="M300 138 l6 -14 l6 14 Z"/></g>`),
+
+  glockner: svg(`
+    <rect width="375" height="160" fill="url(#sky-warm)"/>
+    <circle cx="66" cy="42" r="44" fill="url(#glow)" transform="translate(66 42)"/><circle cx="66" cy="42" r="13" fill="#ffd9e6"/>
+    <path d="M0 160 L80 74 L150 128 L220 60 L300 120 L375 84 L375 160 Z" fill="#7b6aa8" opacity=".45"/>
+    ${HAZE}
+    <path d="M0 160 L95 44 L150 104 L210 32 L300 116 L375 72 L375 160 Z" fill="#332e60"/>
+    <path d="M210 32 L230 66 L190 66 Z" fill="#f2ecfb"/><path d="M210 32 L210 66 L190 66 Z" fill="#cbc4e6"/>
+    <path d="M95 44 L112 72 L78 72 Z" fill="#f2ecfb"/>
+    <path d="M0 160 L85 116 L170 152 L260 118 L375 146 L375 160 Z" fill="#221d45"/>
+    <path d="M40 160 C 92 150 60 136 126 130 C 176 126 156 116 198 110" stroke="#171334" stroke-width="6" fill="none" stroke-linecap="round" opacity=".85"/>`),
+
+  stubai: svg(`
+    <rect width="375" height="160" fill="url(#sky-day)"/>
+    <circle cx="316" cy="34" r="40" fill="url(#glow)" transform="translate(316 34)"/><circle cx="316" cy="34" r="14" fill="#fff4c8"/>
+    <path d="M0 160 L70 66 L150 130 L235 54 L320 118 L375 90 L375 160 Z" fill="#7f9dc4" opacity=".5"/>
+    ${HAZE}
+    <path d="M0 160 L60 58 L130 150 Z" fill="#41599a"/><path d="M60 58 L77 88 L42 88 Z" fill="#eef6ff"/>
+    <path d="M245 160 L318 52 L375 138 L375 160 Z" fill="#3f5793"/><path d="M318 52 L334 82 L302 82 Z" fill="#eef6ff"/>
+    <path d="M108 160 L188 60 L268 160 Z" fill="#c7dcee"/><path d="M188 60 L216 104 L160 104 Z" fill="#fbfdff"/><path d="M188 60 L188 104 L160 104 Z" fill="#dbe8f4"/>
+    <path d="M182 160 Q189 120 188 104" stroke="#9ad2e8" stroke-width="4.5" fill="none" stroke-linecap="round" opacity=".9"/>
+    <path d="M0 160 Q110 150 375 154 L375 160 Z" fill="#7bb06e"/>`),
+
+  grindelwald: svg(`
+    <rect width="375" height="160" fill="url(#sky-warm)"/>
+    <circle cx="54" cy="34" r="40" fill="url(#glow)" transform="translate(54 34)"/><circle cx="54" cy="34" r="13" fill="#ffe4b0"/>
+    <path d="M0 160 L70 80 L150 132 L250 70 L340 120 L375 100 L375 160 Z" fill="#7385c4" opacity=".45"/>
+    ${HAZE}
+    <path d="M120 160 L236 16 L344 160 Z" fill="#3c4166"/>
+    <path d="M236 16 L268 64 L236 64 L251 92 L207 92 L221 64 L204 64 Z" fill="#f3f6fb"/>
+    <path d="M236 16 L236 64 L221 64 L207 92 L229 92 L236 78 Z" fill="#cdd4e6"/>
+    <path d="M0 160 L80 96 L175 150 Z" fill="#5c8a34" opacity=".5"/><path d="M262 160 L326 104 L375 142 L375 160 Z" fill="#4a63a0" opacity=".65"/>
+    <path d="M0 160 Q120 146 375 152 L375 160 Z" fill="#6ba85c"/>
+    <g><rect x="78" y="128" width="24" height="20" fill="#efe0c8"/><path d="M73 128 L90 112 L107 128 Z" fill="#7a4a22"/></g>
+    <rect x="128" y="136" width="18" height="13" fill="#efe0c8"/><path d="M124 136 L137 124 L150 136 Z" fill="#8a5a2b"/>`),
+
+  munich: svg(`
+    <rect width="375" height="160" fill="url(#sky-night)"/>
+    <g fill="#fff"><circle cx="46" cy="22" r="1.3" opacity=".8"/><circle cx="120" cy="16" r="1" opacity=".55"/><circle cx="300" cy="20" r="1.2" opacity=".7"/><circle cx="352" cy="30" r="1" opacity=".5"/></g>
+    <circle cx="58" cy="38" r="40" fill="url(#glow)" transform="translate(58 38)"/><circle cx="58" cy="38" r="12" fill="#ffe6bc"/>
+    <path d="M0 160 L60 118 L150 150 L250 116 L375 146 L375 160 Z" fill="#4a4a86" opacity=".4"/>
+    ${HAZE}
+    <path d="M0 160 V122 h30 v-14 h22 v14 h24 V98 h34 v62 Z" fill="#20223f"/>
+    <rect x="150" y="74" width="17" height="86" fill="#282a4d"/><path d="M150 74 q8.5 -16 17 0 Z" fill="#343764"/><circle cx="158.5" cy="55" r="5" fill="#343764"/>
+    <rect x="176" y="74" width="17" height="86" fill="#282a4d"/><path d="M176 74 q8.5 -16 17 0 Z" fill="#343764"/><circle cx="184.5" cy="55" r="5" fill="#343764"/>
+    <path d="M205 160 V110 h28 v-18 h20 v18 h26 v50 Z" fill="#20223f"/><path d="M290 160 V126 h40 v-20 h24 v54 Z" fill="#282a4d"/>
+    <g fill="#ffd98a"><rect x="10" y="130" width="3.2" height="4.6" opacity=".95"/><rect x="40" y="116" width="3.2" height="4.6" opacity=".8"/><rect x="62" y="132" width="3.2" height="4.6" opacity=".9"/><rect x="214" y="122" width="3.2" height="4.6" opacity=".85"/><rect x="240" y="102" width="3.2" height="4.6" opacity=".95"/><rect x="300" y="136" width="3.2" height="4.6" opacity=".8"/><rect x="340" y="118" width="3.2" height="4.6" opacity=".9"/><rect x="155" y="92" width="2.8" height="4.6" opacity=".7"/><rect x="181" y="100" width="2.8" height="4.6" opacity=".7"/></g>`),
 };
 
 // Which scene fits today? Movement beats location; location maps by base.
@@ -1119,5 +1164,29 @@ function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
+
+// Subtle hero parallax — the title/countdown drift up and fade as you scroll,
+// floating over the static illustrated peaks for a sense of depth. rAF-throttled,
+// disabled under reduced-motion. No transform on the art, so the composition
+// is never cropped.
+(function heroParallax() {
+  if (reducedMotion) return;
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      if (state.tab === 'home') {
+        const y = Math.min(window.scrollY, 200);
+        const content = document.getElementById('heroContent');
+        const count = document.getElementById('heroCountdown');
+        const fade = 1 - y / 260;
+        if (content) { content.style.transform = `translateY(${(y * 0.2).toFixed(1)}px)`; content.style.opacity = fade.toFixed(2); }
+        if (count && !count.hidden) { count.style.transform = `translateY(${(y * 0.12).toFixed(1)}px)`; count.style.opacity = fade.toFixed(2); }
+      }
+      ticking = false;
+    });
+  }, { passive: true });
+})();
 
 window.main = main;
