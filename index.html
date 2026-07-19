@@ -88,6 +88,15 @@
           </div>
           <input type="text" id="expNote" class="qa__note" placeholder="note…" aria-label="Note" />
         </div>
+        <div class="qa__row qa__row--opts">
+          <div class="seg" id="paySeg">
+            <button type="button" data-pay="card" class="is-active">💳 Card</button>
+            <button type="button" data-pay="cash">💵 Cash</button>
+          </div>
+          <label class="hfc-check" id="hfcRow" hidden>
+            <input type="checkbox" id="expHalfFare" /> <span>½ fare used</span>
+          </label>
+        </div>
         <div class="qa__row qa__row--deposit" id="depositRow" hidden>
           <label for="expDeposit" class="qa__deplabel">Deposit paid now</label>
           <input type="number" inputmode="decimal" id="expDeposit" class="qa__deposit" placeholder="0" />
@@ -241,12 +250,38 @@
         <span>Note</span>
         <input type="text" id="editNote" />
       </label>
+      <div class="qa__row qa__row--opts">
+        <div class="seg" id="editPaySeg">
+          <button type="button" data-pay="card" class="is-active">💳 Card</button>
+          <button type="button" data-pay="cash">💵 Cash</button>
+        </div>
+        <label class="hfc-check" id="editHfcRow" hidden>
+          <input type="checkbox" id="editHalfFare" /> <span>½ fare used</span>
+        </label>
+      </div>
 
       <button class="btn-add" id="markPaidBtn">Mark fully paid</button>
       <div class="sheet__actions">
         <button class="btn-ghost" id="deleteExpBtn">Delete</button>
         <button class="btn-ghost" id="cancelEditBtn">Cancel</button>
         <button class="btn-primary" id="saveEditBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ADD CASH SHEET ============ -->
+  <div class="sheet-backdrop" id="cashSheet" hidden>
+    <div class="sheet" role="dialog" aria-label="Add cash">
+      <div class="sheet__handle"></div>
+      <div class="sheet__title">Add cash</div>
+      <p class="hint">Starting cash, an ATM withdrawal, or money changed into a new currency — it all fills the same envelope, locked at today's rate.</p>
+      <div class="qa__row">
+        <input type="number" inputmode="decimal" id="cashAmount" class="qa__amount" placeholder="0" aria-label="Amount" />
+        <select id="cashCurrency" class="qa__cur" aria-label="Currency"></select>
+      </div>
+      <div class="sheet__actions">
+        <button class="btn-ghost" id="cancelCashBtn">Cancel</button>
+        <button class="btn-primary" id="saveCashBtn">Add cash</button>
       </div>
     </div>
   </div>

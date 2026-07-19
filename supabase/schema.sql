@@ -68,6 +68,19 @@ create table if not exists expenses (
   created_at timestamptz not null default now()
 );
 
+alter table expenses add column if not exists pay_method text not null default 'card';
+alter table expenses add column if not exists half_fare boolean not null default false;
+
+-- ---------- cash withdrawals (the cash pot's inflows) ----------
+create table if not exists withdrawals (
+  id uuid primary key default gen_random_uuid(),
+  amount numeric not null,
+  currency text not null,
+  base_amount numeric not null,   -- locked at that day's rate, never recomputed
+  who text not null default '',
+  created_at timestamptz not null default now()
+);
+
 -- ---------- itinerary ----------
 create table if not exists itinerary (
   id uuid primary key default gen_random_uuid(),
@@ -94,11 +107,12 @@ alter table rates enable row level security;
 alter table categories enable row level security;
 alter table expenses enable row level security;
 alter table itinerary enable row level security;
+alter table withdrawals enable row level security;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['settings','currencies','rates','categories','expenses','itinerary']
+  foreach t in array array['settings','currencies','rates','categories','expenses','itinerary','withdrawals']
   loop
     execute format('drop policy if exists trip_members_all on %I', t);
     execute format(
@@ -114,3 +128,4 @@ end $$;
 -- fine but the other device only sees it after a manual refresh).
 alter publication supabase_realtime
   add table settings, currencies, rates, categories, expenses, itinerary;
+alter publication supabase_realtime add table withdrawals;

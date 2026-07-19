@@ -335,6 +335,8 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 .pill--paid { background: #d9f3ea; color: #0d7a5a; }
 .pill--partial { background: #fdeed3; color: #a36a00; }
 .pill--committed { background: #e4e9ff; color: #3d55d8; }
+.pill--hfc { background: #fde3e3; color: #b03a3a; }
+.pill--cash { background: #eef0da; color: #6b7433; }
 .avatar {
   width: 22px; height: 22px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
@@ -568,6 +570,37 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   transition: width var(--t-spring);
 }
 .widget__sub { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); line-height: 1.4; }
+.widget--rose {
+  background: rgba(255, 233, 233, .78);
+  border-color: rgba(224, 92, 92, .12);
+}
+.widget--rose .widget__bar { background: #f6dcdc; }
+.widget__act {
+  float: right;
+  border: none;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary-deep);
+  font-family: var(--font-body);
+  font-size: 10.5px; font-weight: 800;
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.widget__act:active { transform: scale(.93); }
+
+/* ½ fare checkbox */
+.hfc-check {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 800;
+  color: var(--ink);
+  background: var(--track);
+  border-radius: 12px;
+  padding: 9px 12px;
+  cursor: pointer;
+  flex: none;
+}
+.hfc-check input { width: 17px; height: 17px; accent-color: #e05c5c; }
 
 /* ---------- Donut ---------- */
 .donut-card .card__title { margin-bottom: 4px; }

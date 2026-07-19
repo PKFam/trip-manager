@@ -23,6 +23,32 @@ async function loadAll() {
   state.categories = await Store.getCategories();
   state.expenses = await Store.getExpenses();
   state.itinerary = await Store.getItinerary();
+  // withdrawals table may not exist until the migration runs — degrade gracefully
+  try { state.withdrawals = await Store.getWithdrawals(); } catch (e) { state.withdrawals = []; }
+}
+
+// ---------- daily live FX rates (ECB via frankfurter.app, keyless) ----------
+// Once per day per device: refresh the shared rate table. Entry-time conversion
+// then uses today's real rate; each stored expense keeps its locked base_amount
+// forever — historical numbers NEVER move when rates change.
+async function refreshRatesDaily() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem('tripbudget:ratesday') === today) return;
+    const base = state.settings.baseCurrency;
+    const others = state.currencies.map((c) => c.code).filter((c) => c !== base);
+    if (!others.length) return;
+    const res = await fetch(`https://api.frankfurter.app/latest?from=${base}&to=${others.join(',')}`);
+    if (!res.ok) throw new Error('fx http ' + res.status);
+    const data = await res.json();
+    const rates = { ...state.rates, [base]: 1 };
+    for (const [code, perBase] of Object.entries(data.rates)) rates[code] = 1 / perBase; // 1 CODE in BASE units
+    await Store.saveRates(rates);
+    state.rates = rates;
+    localStorage.setItem('tripbudget:ratesday', today);
+  } catch (e) {
+    console.warn('daily rate refresh skipped (offline or API down) — using last known rates', e);
+  }
 }
 
 // ---------- money helpers ----------
@@ -66,6 +92,23 @@ function buildTree() {
   }
   (childrenMap.__root || []).forEach(calc);
   const allRoots = childrenMap.__root || [];
+
+  // FX & Exchange: a real category that ALSO auto-accrues the card's 1%
+  // conversion markup on every non-base-currency card purchase. Fees ride on
+  // the locked base amounts, so they're locked too.
+  const baseCur = state.settings ? state.settings.baseCurrency : 'USD';
+  const fxRoot = allRoots.find((c) => /fx|exchange/i.test(c.name));
+  if (fxRoot) {
+    let feeC = 0, feeP = 0;
+    for (const e of state.expenses) {
+      if ((e.payMethod || 'card') === 'card' && e.currency !== baseCur) {
+        feeC += Number(e.baseAmount) * 0.01;
+        feeP += Number(e.paidBase) * 0.01;
+      }
+    }
+    committed[fxRoot.id] += feeC;
+    paid[fxRoot.id] += feeP;
+  }
   // "separate" buckets (e.g. Shopping) live OUTSIDE the trip budget:
   // excluded from totals, donut, category list, and the day chart.
   const tripRoots = allRoots.filter((c) => !c.separate);
@@ -405,8 +448,71 @@ function renderWidgets(t) {
       </div>`;
   }
 
+  // --- Half Fare Card: how close are we to recouping the 300 CHF? ---
+  // With the HFC you pay half price, so every ½-fare franc paid = a franc saved.
+  {
+    const HFC_INVEST = 300; // 2 × Swiss Half Fare Card, in CHF
+    const savedCHF = state.expenses
+      .filter((e) => e.halfFare && e.currency === 'CHF')
+      .reduce((s, e) => s + Number(e.amount), 0);
+    const fmtCHF = (v) => Currency.format(Math.round(v), 'CHF', state.currencies);
+    const pct = Math.min((savedCHF / HFC_INVEST) * 100, 100);
+    let tip;
+    if (savedCHF === 0) tip = `tick “½ fare” on Swiss ticket buys — ${fmtCHF(HFC_INVEST)} to recoup`;
+    else if (savedCHF < HFC_INVEST) tip = `${fmtCHF(HFC_INVEST - savedCHF)} to go to break even on the cards`;
+    else tip = `🎉 cards paid for themselves — ${fmtCHF(savedCHF - HFC_INVEST)} pure savings`;
+    html += `
+      <div class="widget widget--rose">
+        <div class="widget__head">🚆 Half Fare Card</div>
+        <div class="widget__big">${fmtCHF(savedCHF)}<small> saved</small></div>
+        <div class="widget__bar"><i style="width:${pct}%;background:#e05c5c"></i></div>
+        <div class="widget__sub">${tip}</div>
+      </div>`;
+  }
+
+  // --- Card vs Cash: the envelope of physical money ---
+  {
+    const withdrawn = state.withdrawals.reduce((s, w) => s + Number(w.baseAmount), 0);
+    const cashSpent = state.expenses.filter((e) => e.payMethod === 'cash').reduce((s, e) => s + Number(e.baseAmount), 0);
+    const cashLeft = withdrawn - cashSpent;
+    const pct = withdrawn > 0 ? Math.min((cashSpent / withdrawn) * 100, 100) : 0;
+    html += `
+      <div class="widget">
+        <div class="widget__head">💵 Cash <button type="button" class="widget__act" data-addcash>+ cash</button></div>
+        <div class="widget__big ${cashLeft < 0 ? 'is-over' : ''}">${fmtBase(cashLeft)}<small> left</small></div>
+        <div class="widget__bar"><i style="width:${pct}%;background:#8a9455"></i></div>
+        <div class="widget__sub">${withdrawn > 0 ? `in ${fmtBase(withdrawn)} · spent ${fmtBase(cashSpent)}` : 'add your starting cash with “+ cash”'}</div>
+      </div>`;
+  }
+
   row.innerHTML = html;
   row.hidden = !html;
+  const addCashBtn = row.querySelector('[data-addcash]');
+  if (addCashBtn) addCashBtn.onclick = (ev) => { ev.stopPropagation(); openCashSheet(); };
+}
+
+// ---------- cash sheet ----------
+function openCashSheet() {
+  $('#cashAmount').value = '';
+  const sel = $('#cashCurrency');
+  sel.innerHTML = '';
+  for (const c of state.currencies) { const o = el('option'); o.value = c.code; o.textContent = c.code; sel.appendChild(o); }
+  sel.value = state.settings.baseCurrency;
+  $('#cashSheet').hidden = false;
+  setTimeout(() => $('#cashAmount').focus(), 50);
+}
+async function saveCash() {
+  const amount = parseFloat($('#cashAmount').value);
+  if (!amount || amount <= 0) { $('#cashAmount').focus(); return; }
+  const currency = $('#cashCurrency').value;
+  await Store.addWithdrawal({
+    amount, currency,
+    baseAmount: Currency.toBase(amount, currency, state.rates), // locked at today's rate
+    who: Auth.user.who,
+  });
+  $('#cashSheet').hidden = true;
+  await loadAll();
+  renderDashboard();
 }
 
 function renderSubs(parent, t) {
@@ -555,7 +661,15 @@ function renderQuickAdd() {
   curSel.innerHTML = '';
   for (const c of state.currencies) { const o = el('option'); o.value = c.code; o.textContent = c.code; curSel.appendChild(o); }
   curSel.value = state.currencies.find((c) => c.code === disp()) ? disp() : state.settings.baseCurrency;
+  syncHalfFareRow();
   renderChips($('#catChips'), () => state.addCategoryId, (id) => { state.addCategoryId = id; });
+}
+
+// the ½-fare checkbox only makes sense for Swiss (CHF) purchases
+function syncHalfFareRow() {
+  const isCHF = $('#expCurrency').value === 'CHF';
+  $('#hfcRow').hidden = !isCHF;
+  if (!isCHF) $('#expHalfFare').checked = false;
 }
 
 function renderChips(wrap, getSel, setSel) {
@@ -591,10 +705,13 @@ async function addExpense() {
     amount, currency, baseAmount, paidAmount, paidBase,
     note: $('#expNote').value.trim(),
     who: Auth.user.who,
+    payMethod: state.addPay || 'card',
+    halfFare: currency === 'CHF' && $('#expHalfFare').checked,
   });
   $('#expAmount').value = '';
   $('#expNote').value = '';
   $('#expDeposit').value = '';
+  $('#expHalfFare').checked = false;
   await loadAll();
   renderDashboard();
   confettiBurst($('#addBtn'), cat ? cat.color : '#5b7cfa');
@@ -651,6 +768,8 @@ function renderLedger() {
       <span class="lrow__right">
         <span class="lrow__amt">${Currency.format(e.amount, e.currency, state.currencies)}</span>
         <span class="lrow__badges">
+          ${e.halfFare ? '<span class="pill pill--hfc">½ fare</span>' : ''}
+          ${e.payMethod === 'cash' ? '<span class="pill pill--cash">cash</span>' : ''}
           <span class="pill pill--${st}">${STATUS_LABEL[st]}</span>
           <span class="avatar avatar--${who === 'T' ? 't' : 'g'}">${who}</span>
         </span>
@@ -670,6 +789,10 @@ function openEditSheet(id) {
   $('#editAmount').value = e.amount;
   $('#editPaid').value = e.paidAmount;
   $('#editNote').value = e.note;
+  state.editPay = e.payMethod || 'card';
+  $('#editPaySeg').querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b.dataset.pay === state.editPay));
+  $('#editHalfFare').checked = !!e.halfFare;
+  $('#editHfcRow').hidden = e.currency !== 'CHF';
   const curSel = $('#editCurrency');
   curSel.innerHTML = '';
   for (const c of state.currencies) { const o = el('option'); o.value = c.code; o.textContent = c.code; curSel.appendChild(o); }
@@ -695,6 +818,8 @@ async function saveEdit(overridePaid) {
     paidBase: Currency.toBase(paidAmount, currency, state.rates),
     categoryId: state.editCategoryId,
     note: $('#editNote').value.trim(),
+    payMethod: state.editPay || 'card',
+    halfFare: currency === 'CHF' && $('#editHalfFare').checked,
   });
   closeEditSheet();
   await loadAll();
@@ -889,6 +1014,24 @@ function wireEvents() {
       $('#depositRow').hidden = state.addMode !== 'committed';
     };
   });
+  state.addPay = 'card';
+  $('#paySeg').querySelectorAll('button').forEach((btn) => {
+    btn.onclick = () => {
+      state.addPay = btn.dataset.pay;
+      $('#paySeg').querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b === btn));
+    };
+  });
+  $('#expCurrency').onchange = syncHalfFareRow;
+  $('#editPaySeg').querySelectorAll('button').forEach((btn) => {
+    btn.onclick = () => {
+      state.editPay = btn.dataset.pay;
+      $('#editPaySeg').querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b === btn));
+    };
+  });
+  $('#editCurrency').onchange = (ev) => { $('#editHfcRow').hidden = ev.target.value !== 'CHF'; };
+  $('#cancelCashBtn').onclick = () => { $('#cashSheet').hidden = true; };
+  $('#saveCashBtn').onclick = saveCash;
+  $('#cashSheet').onclick = (e) => { if (e.target.id === 'cashSheet') $('#cashSheet').hidden = true; };
 
   $('#displayCurrency').onchange = async (e) => {
     state.settings = await Store.saveSettings({ displayCurrency: e.target.value });
@@ -947,6 +1090,7 @@ async function main() {
     if (!wired) { wireEvents(); wired = true; } // buttons live even while data loads
     await Store.init();
     await loadAll();
+    await refreshRatesDaily();
     renderDisplayCurrencyOptions();
     switchTab(state.tab || 'home');
     subscribeRealtime();

@@ -37,6 +37,7 @@ function rowToExp(r) {
     id: r.id, categoryId: r.category_id, amount: Number(r.amount), currency: r.currency,
     baseAmount: Number(r.base_amount), paidAmount: Number(r.paid_amount), paidBase: Number(r.paid_base),
     note: r.note, who: r.who, createdAt: new Date(r.created_at).getTime(),
+    payMethod: r.pay_method || 'card', halfFare: !!r.half_fare,
   };
 }
 function expPatchToRow(p) {
@@ -49,6 +50,8 @@ function expPatchToRow(p) {
   if ('paidBase' in p) row.paid_base = Number(p.paidBase);
   if ('note' in p) row.note = p.note;
   if ('who' in p) row.who = p.who;
+  if ('payMethod' in p) row.pay_method = p.payMethod;
+  if ('halfFare' in p) row.half_fare = !!p.halfFare;
   return row;
 }
 
@@ -187,6 +190,22 @@ const Store = {
     return rowToExp(unwrap(await sb.from('expenses').update(expPatchToRow(patch)).eq('id', id).select().single()));
   },
   async deleteExpense(id) { unwrap(await sb.from('expenses').delete().eq('id', id)); },
+
+  // ---- cash withdrawals (the cash pot's inflows) ----
+  async getWithdrawals() {
+    const rows = unwrap(await sb.from('withdrawals').select('*').order('created_at', { ascending: false }));
+    return rows.map((r) => ({
+      id: r.id, amount: Number(r.amount), currency: r.currency,
+      baseAmount: Number(r.base_amount), who: r.who, createdAt: new Date(r.created_at).getTime(),
+    }));
+  },
+  async addWithdrawal(w) {
+    unwrap(await sb.from('withdrawals').insert({
+      amount: Number(w.amount), currency: w.currency,
+      base_amount: Number(w.baseAmount), who: w.who || '',
+    }).select().single());
+  },
+  async deleteWithdrawal(id) { unwrap(await sb.from('withdrawals').delete().eq('id', id)); },
 };
 
 window.Store = Store;
