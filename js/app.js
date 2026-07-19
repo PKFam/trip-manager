@@ -493,25 +493,38 @@ function renderWidgets(t) {
       </div>`;
   }
 
-  // --- Half Fare Card: how close are we to recouping the 300 CHF? ---
-  // With the HFC you pay half price, so every ½-fare franc paid = a franc saved.
+  // --- Half Fare Card: a recoup meter that starts in the RED (down the 300 CHF
+  // the cards cost) and climbs through break-even into the GREEN as ½-fare
+  // savings pile up. Net = saved − investment. With the HFC you pay half, so
+  // every ½-fare franc paid IS a franc saved.
   {
-    const HFC_INVEST = 300; // 2 × Swiss Half Fare Card, in CHF
-    const savedCHF = state.expenses
-      .filter((e) => e.halfFare && e.currency === 'CHF')
-      .reduce((s, e) => s + Number(e.amount), 0);
+    const INVEST = 300; // 2 × Swiss Half Fare Card, CHF
+    const chfBuys = state.expenses.filter((e) => e.currency === 'CHF');
+    const saved = chfBuys.filter((e) => e.halfFare).reduce((s, e) => s + Number(e.amount), 0);
+    const net = saved - INVEST;                       // negative until break-even
     const fmtCHF = (v) => Currency.format(Math.round(v), 'CHF', state.currencies);
-    const pct = Math.min((savedCHF / HFC_INVEST) * 100, 100);
-    let tip;
-    if (savedCHF === 0) tip = `tick “½ fare” on Swiss ticket buys — ${fmtCHF(HFC_INVEST)} to recoup`;
-    else if (savedCHF < HFC_INVEST) tip = `${fmtCHF(HFC_INVEST - savedCHF)} to go to break even on the cards`;
-    else tip = `🎉 cards paid for themselves — ${fmtCHF(savedCHF - HFC_INVEST)} pure savings`;
+    const p = Math.max(-1, Math.min(1, net / INVEST)); // -1 (fully in the red) … +1
+    const green = net >= 0;
+    const col = green ? 'var(--ok)' : '#e0544f';
+    const fillLeft = p < 0 ? 50 + p * 50 : 50;         // % from left
+    const fillW = Math.abs(p) * 50;                    // %
+    const headline = green ? '+' + fmtCHF(net) : '−' + fmtCHF(-net);
+    let sub;
+    if (saved === 0) sub = chfBuys.length
+      ? `tick “½ fare” on Swiss tickets so they count · ${fmtCHF(INVEST)} to recoup`
+      : `${fmtCHF(INVEST)} invested · savings start in Switzerland`;
+    else if (net < 0) sub = `saved ${fmtCHF(saved)} of ${fmtCHF(INVEST)} · ${fmtCHF(-net)} to break even`;
+    else if (net === 0) sub = `broke even — every franc from here is profit`;
+    else sub = `🎉 recouped · ${fmtCHF(net)} ahead`;
     html += `
-      <div class="widget widget--rose">
+      <div class="widget">
         <div class="widget__head">🚆 Half Fare Card</div>
-        <div class="widget__big">${fmtCHF(savedCHF)}<small> saved</small></div>
-        <div class="widget__bar"><i style="width:${pct}%;background:#e05c5c"></i></div>
-        <div class="widget__sub">${tip}</div>
+        <div class="widget__big" style="color:${col}">${headline}</div>
+        <div class="dbar">
+          <span class="dbar__fill" style="left:${fillLeft}%;width:${fillW}%;background:${col}"></span>
+          <span class="dbar__zero"></span>
+        </div>
+        <div class="widget__sub">${sub}</div>
       </div>`;
   }
 

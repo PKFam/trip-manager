@@ -575,6 +575,18 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   border-color: rgba(224, 92, 92, .12);
 }
 .widget--rose .widget__bar { background: #f6dcdc; }
+
+/* diverging recoup bar: red on the left (in the hole), green on the right
+   (in profit), a zero tick at the break-even midpoint */
+.dbar {
+  position: relative; height: 9px;
+  background: var(--track);
+  box-shadow: inset 0 1px 2px rgba(28, 32, 51, .07);
+  border-radius: 999px;
+  margin: 9px 0 7px;
+}
+.dbar__fill { position: absolute; top: 0; bottom: 0; border-radius: 999px; transition: left var(--t-spring), width var(--t-spring), background var(--t-spring); }
+.dbar__zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; transform: translateX(-50%); background: var(--ink-soft); opacity: .55; border-radius: 2px; }
 .widget__act {
   float: right;
   border: none;
