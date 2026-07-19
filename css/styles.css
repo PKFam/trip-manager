@@ -673,6 +673,28 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   background: var(--track);
 }
 
+/* ---------- Sync status chip ---------- */
+.sync-chip {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(84px + var(--safe-bottom));
+  z-index: 60;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(28, 32, 51, .9);
+  color: #fff;
+  font-size: 12px; font-weight: 800;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(28, 32, 51, .3);
+  backdrop-filter: blur(8px);
+  animation: rise .3s ease;
+}
+.sync-chip.is-offline { background: rgba(120, 90, 40, .94); }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #ffd98a; }
+.sync-chip.is-offline .sync-dot { background: #ffce7a; }
+.sync-dot--spin { border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; background: none; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ---------- Finesse: momentum scroll + refined scrollbar ---------- */
 html { scroll-behavior: smooth; }
 body { -webkit-overflow-scrolling: touch; }

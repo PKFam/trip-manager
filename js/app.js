@@ -1043,6 +1043,22 @@ function renderDisplayCurrencyOptions() {
   sel.value = state.settings.displayCurrency;
 }
 
+// ================= SYNC STATUS CHIP =================
+// Quiet, honest feedback: appears only when offline or when writes are waiting
+// to upload. Never nags when everything is synced.
+function renderSyncChip(s) {
+  let chip = $('#syncChip');
+  if (!chip) {
+    chip = el('div', 'sync-chip'); chip.id = 'syncChip'; document.body.appendChild(chip);
+  }
+  const show = s.offline || s.pending > 0;
+  chip.hidden = !show;
+  chip.classList.toggle('is-offline', s.offline);
+  if (!show) return;
+  if (s.offline) chip.innerHTML = `<span class="sync-dot"></span>Offline · ${s.pending ? s.pending + ' waiting' : 'changes save here'}`;
+  else chip.innerHTML = `<span class="sync-dot sync-dot--spin"></span>Syncing ${s.pending}…`;
+}
+
 // ================= UTIL =================
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m])); }
 function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
@@ -1133,12 +1149,14 @@ let realtimeChannel = null;
 async function main() {
   try {
     if (!wired) { wireEvents(); wired = true; } // buttons live even while data loads
+    window.onSyncState = renderSyncChip;
     await Store.init();
     await loadAll();
-    await refreshRatesDaily();
+    refreshRatesDaily(); // background; don't block boot on the rate feed
     renderDisplayCurrencyOptions();
     switchTab(state.tab || 'home');
     subscribeRealtime();
+    renderSyncChip(Store.syncState());
   } catch (e) {
     // Never fail silently into a dead skeleton — say what broke.
     console.error('boot failed', e);
@@ -1146,18 +1164,28 @@ async function main() {
   }
 }
 
-// Live sync: when Gil or Tammy's phone writes anywhere, both phones pick it
-// up within a second or two, no manual refresh.
+// re-render whatever tab is showing, from the current (mirror) state
+function refreshCurrentTab() {
+  if (state.tab === 'home') { renderHero(); renderBrief(); renderQuickAdd(); renderDashboard(); }
+  if (state.tab === 'ledger') { renderDayChart(); renderLedger(); }
+  if (state.tab === 'settings') renderSettings();
+}
+async function refreshUI() { await loadAll(); refreshCurrentTab(); }
+
+// Live sync: when Gil or Tammy's phone writes anywhere, both phones pull the
+// change into their local mirror and repaint within a second or two.
 function subscribeRealtime() {
   if (realtimeChannel) return; // already listening
   realtimeChannel = sb.channel('trip-changes')
     .on('postgres_changes', { event: '*', schema: 'public' }, debounce(async () => {
-      await loadAll();
-      if (state.tab === 'home') { renderHero(); renderBrief(); renderQuickAdd(); renderDashboard(); }
-      if (state.tab === 'ledger') { renderDayChart(); renderLedger(); }
-      if (state.tab === 'settings') renderSettings();
+      await Store.sync();   // flush anything pending, then pull server truth
+      await refreshUI();
     }, 400))
     .subscribe();
+
+  // reconnect / return-to-app → sync and repaint
+  window.onSynced = () => refreshUI();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) Store.sync().then(refreshUI); });
 }
 
 function debounce(fn, ms) {

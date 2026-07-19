@@ -1,25 +1,26 @@
-// store.js — the ONLY place that touches persistence.
-// Backed by Supabase (Postgres) now — every read/write goes over the network
-// to the shared database, so Gil and Tammy always see the same numbers.
-// The interface (method names + shapes) is unchanged from the old
-// localStorage version, which is why app.js didn't need to be rewritten.
+// store.js — LOCAL-FIRST persistence.
 //
-// Field names: the app speaks camelCase; the database speaks snake_case.
-// Every mapper below does that translation in exactly one place.
-// Note: Postgres `numeric` columns come back over the wire as STRINGS (to
-// preserve precision) — every numeric field is explicitly wrapped in
-// Number(...) on the way in, or budget math would silently do string
-// concatenation instead of addition.
+// Reads come from a local mirror in localStorage, so the app opens and works
+// with zero signal. Writes update the mirror instantly (optimistic UI) and are
+// queued in an outbox; a background flush drains the outbox to Supabase the
+// moment connectivity returns. Every row's id is generated on the client, so
+// re-sending a queued write is idempotent (upsert) — no duplicates, ever.
+//
+// Public interface is unchanged from the old cloud-only Store, so app.js only
+// needed its realtime/boot wiring adjusted.
 
-function unwrap({ data, error }) {
-  if (error) throw error;
-  return data;
-}
+function unwrap({ data, error }) { if (error) throw error; return data; }
+function ok(res) { if (res && res.error) throw res.error; return res; }
 
-// ---------- field mappers ----------
-function rowToCat(r) {
-  return { id: r.id, name: r.name, icon: r.icon, color: r.color, budget: Number(r.budget), parentId: r.parent_id, order: r.order, separate: !!r.separate };
-}
+const uuid = () =>
+  (crypto.randomUUID ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      }));
+
+// ---------- field mappers (server snake_case <-> app camelCase) ----------
+const rowToCat = (r) => ({ id: r.id, name: r.name, icon: r.icon, color: r.color, budget: Number(r.budget), parentId: r.parent_id, order: r.order, separate: !!r.separate });
+const catToRow = (c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color, budget: Number(c.budget) || 0, parent_id: c.parentId ?? null, order: c.order ?? 0, separate: !!c.separate });
 function catPatchToRow(p) {
   const row = {};
   if ('name' in p) row.name = p.name;
@@ -31,15 +32,18 @@ function catPatchToRow(p) {
   if ('separate' in p) row.separate = !!p.separate;
   return row;
 }
-
-function rowToExp(r) {
-  return {
-    id: r.id, categoryId: r.category_id, amount: Number(r.amount), currency: r.currency,
-    baseAmount: Number(r.base_amount), paidAmount: Number(r.paid_amount), paidBase: Number(r.paid_base),
-    note: r.note, who: r.who, createdAt: new Date(r.created_at).getTime(),
-    payMethod: r.pay_method || 'card', halfFare: !!r.half_fare,
-  };
-}
+const rowToExp = (r) => ({
+  id: r.id, categoryId: r.category_id, amount: Number(r.amount), currency: r.currency,
+  baseAmount: Number(r.base_amount), paidAmount: Number(r.paid_amount), paidBase: Number(r.paid_base),
+  note: r.note, who: r.who, createdAt: new Date(r.created_at).getTime(),
+  payMethod: r.pay_method || 'card', halfFare: !!r.half_fare,
+});
+const expToRow = (e) => ({
+  id: e.id, category_id: e.categoryId, amount: Number(e.amount), currency: e.currency,
+  base_amount: Number(e.baseAmount), paid_amount: Number(e.paidAmount || 0), paid_base: Number(e.paidBase || 0),
+  note: e.note || '', who: e.who || '', pay_method: e.payMethod || 'card', half_fare: !!e.halfFare,
+  created_at: new Date(e.createdAt).toISOString(),
+});
 function expPatchToRow(p) {
   const row = {};
   if ('categoryId' in p) row.category_id = p.categoryId;
@@ -54,10 +58,7 @@ function expPatchToRow(p) {
   if ('halfFare' in p) row.half_fare = !!p.halfFare;
   return row;
 }
-
-function rowToSettings(r) {
-  return { tripName: r.trip_name, tripDates: r.trip_dates, baseCurrency: r.base_currency, displayCurrency: r.display_currency, bannerImage: r.banner_image };
-}
+const rowToSettings = (r) => ({ tripName: r.trip_name, tripDates: r.trip_dates, baseCurrency: r.base_currency, displayCurrency: r.display_currency, bannerImage: r.banner_image });
 function settingsPatchToRow(p) {
   const row = {};
   if ('tripName' in p) row.trip_name = p.tripName;
@@ -68,144 +69,222 @@ function settingsPatchToRow(p) {
   return row;
 }
 
-// ---------- first-run seed (only inserted if the tables are empty) ----------
-const SEED_CURRENCIES = [
-  { code: 'USD', symbol: '$' }, { code: 'EUR', symbol: '€' },
-  { code: 'ILS', symbol: '₪' }, { code: 'CHF', symbol: '₣' },
-];
-const SEED_RATES = { USD: 1, EUR: 1.08, ILS: 0.27, CHF: 1.10 };
-const SEED_ITINERARY = [
-  { date: '2026-07-25', place: 'Vienna', lat: 48.2082, lon: 16.3738, line: 'Landing day — easy evening in Vienna.' },
-  { date: '2026-07-28', place: 'Salzburg', lat: 47.8095, lon: 13.0550, line: 'Drive to Salzburg — old town stroll.' },
-  { date: '2026-08-01', place: 'Hallstatt', lat: 47.5622, lon: 13.6493, line: 'Hallstatt lake day.' },
-  { date: '2026-08-05', place: 'Innsbruck', lat: 47.2692, lon: 11.4041, line: 'Into the mountains — Innsbruck.' },
-];
+// ---------- the mirror (app-shape data cached in localStorage) ----------
+const MK = 'tb:mirror:';
+const DEFAULT_SETTINGS = { tripName: 'Our Trip', tripDates: '', baseCurrency: 'USD', displayCurrency: 'USD', bannerImage: null };
+const M = {
+  get(name, fb) { try { const v = localStorage.getItem(MK + name); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } },
+  set(name, v) { try { localStorage.setItem(MK + name, JSON.stringify(v)); } catch (e) { console.warn('mirror full', e); } },
+};
 
-async function seedIfEmpty() {
-  const { count: catCount } = await sb.from('categories').select('id', { count: 'exact', head: true });
-  if (!catCount) {
-    await sb.from('currencies').upsert(SEED_CURRENCIES, { onConflict: 'code' });
-    await sb.from('rates').upsert(Object.entries(SEED_RATES).map(([code, rate]) => ({ code, rate })), { onConflict: 'code' });
+// ---------- the outbox (pending writes) ----------
+let outbox = M.get('outbox', []);
+const saveOutbox = () => M.set('outbox', outbox);
+let syncState = { offline: !navigator.onLine, pending: outbox.length, syncing: false };
+function emitSync() {
+  syncState = { offline: !navigator.onLine, pending: outbox.length, syncing: syncState.syncing };
+  if (window.onSyncState) window.onSyncState(syncState);
+}
+function enqueue(op) { outbox.push(op); saveOutbox(); emitSync(); scheduleFlush(); }
 
-    const tops = [
-      { name: 'Accommodation', icon: '🏠', budget: 11000, color: '#5b7cfa', order: 0 },
-      { name: 'Car', icon: '🚗', budget: 0, color: '#ff8a4c', order: 1 },
-      { name: 'Food & Drinks', icon: '🍴', budget: 3500, color: '#14b8a6', order: 2 },
-      { name: 'Attractions', icon: '🎟️', budget: 2000, color: '#f5b301', order: 3 },
-      { name: 'Miscellaneous', icon: '✨', budget: 645, color: '#ec5f9a', order: 4 },
-    ];
-    const topRows = unwrap(await sb.from('categories').insert(tops).select());
-    const carId = topRows.find((r) => r.name === 'Car').id;
-    const kids = [
-      { name: 'Rental', icon: '🚙', budget: 1800, color: '#ff8a4c', order: 0, parent_id: carId },
-      { name: 'Fuel', icon: '⛽', budget: 700, color: '#ffa96e', order: 1, parent_id: carId },
-      { name: 'Vignettes', icon: '🛣️', budget: 355, color: '#ffc39a', order: 2, parent_id: carId },
-    ];
-    await sb.from('categories').insert(kids);
-    await sb.from('settings').update({ trip_name: 'Austria 2026' }).eq('id', 1);
+// translate one queued op into its Supabase call
+async function applyOp(op) {
+  const t = op.entity, k = op.kind, d = op.data;
+  if (t === 'expenses' && k === 'add') return ok(await sb.from('expenses').upsert(expToRow(d), { onConflict: 'id' }));
+  if (t === 'expenses' && k === 'update') return ok(await sb.from('expenses').update(expPatchToRow(d.patch)).eq('id', d.id));
+  if (t === 'expenses' && k === 'delete') return ok(await sb.from('expenses').delete().eq('id', d.id));
+  if (t === 'withdrawals' && k === 'add') return ok(await sb.from('withdrawals').upsert({ id: d.id, amount: Number(d.amount), currency: d.currency, base_amount: Number(d.baseAmount), who: d.who || '', created_at: new Date(d.createdAt).toISOString() }, { onConflict: 'id' }));
+  if (t === 'withdrawals' && k === 'delete') return ok(await sb.from('withdrawals').delete().eq('id', d.id));
+  if (t === 'categories' && k === 'add') return ok(await sb.from('categories').upsert(catToRow(d), { onConflict: 'id' }));
+  if (t === 'categories' && k === 'update') return ok(await sb.from('categories').update(catPatchToRow(d.patch)).eq('id', d.id));
+  if (t === 'categories' && k === 'delete') return ok(await sb.from('categories').delete().eq('id', d.id));
+  if (t === 'settings' && k === 'patch') return ok(await sb.from('settings').update(settingsPatchToRow(d)).eq('id', 1));
+  if (t === 'rates' && k === 'save') return ok(await sb.from('rates').upsert(Object.entries(d).map(([code, rate]) => ({ code, rate: Number(rate) })), { onConflict: 'code' }));
+  if (t === 'currencies' && k === 'replace') {
+    const existing = unwrap(await sb.from('currencies').select('code'));
+    const keep = new Set(d.map((c) => c.code));
+    const del = existing.map((r) => r.code).filter((c) => !keep.has(c));
+    if (del.length) { try { await sb.from('currencies').delete().in('code', del); } catch (e) {} }
+    return ok(await sb.from('currencies').upsert(d.map((c) => ({ code: c.code, symbol: c.symbol })), { onConflict: 'code' }));
   }
-
-  const { count: itinCount } = await sb.from('itinerary').select('id', { count: 'exact', head: true });
-  if (!itinCount) {
-    await sb.from('itinerary').insert(SEED_ITINERARY.map((s) => ({ date: s.date, place: s.place, lat: s.lat, lon: s.lon, line: s.line })));
+  if (t === 'itinerary' && k === 'replace') {
+    await sb.from('itinerary').delete().not('id', 'is', null);
+    if (d.length) return ok(await sb.from('itinerary').insert(d.map((x) => ({ date: x.date, place: x.place, lat: x.lat, lon: x.lon, line: x.line || '' }))));
+    return;
   }
+  console.warn('unknown op dropped', op);
 }
 
+let flushing = false, flushTimer = null;
+function scheduleFlush() { clearTimeout(flushTimer); flushTimer = setTimeout(flush, 300); }
+
+async function flush() {
+  if (flushing || !outbox.length) return;
+  flushing = true; syncState.syncing = true; emitSync();
+  try {
+    while (outbox.length) {
+      const op = outbox[0];
+      try {
+        await applyOp(op);
+        outbox.shift(); saveOutbox(); emitSync();
+      } catch (e) {
+        if (!navigator.onLine) break;                 // offline: retry later, don't count
+        op.tries = (op.tries || 0) + 1; saveOutbox();
+        if (op.tries >= 3) { console.error('dropping poison op after 3 tries', op, e); outbox.shift(); saveOutbox(); emitSync(); }
+        else break;                                    // transient online error: retry later
+      }
+    }
+  } finally { flushing = false; syncState.syncing = false; emitSync(); }
+}
+
+// pull server truth into the mirror (only when the outbox is drained, so we
+// never overwrite un-synced local writes)
+async function pull() {
+  if (outbox.length) return;
+  const [settings, currencies, rates, categories, expenses, itinerary, withdrawals] = await Promise.all([
+    sb.from('settings').select('*').eq('id', 1).single(),
+    sb.from('currencies').select('*'),
+    sb.from('rates').select('*'),
+    sb.from('categories').select('*'),
+    sb.from('expenses').select('*'),
+    sb.from('itinerary').select('*'),
+    sb.from('withdrawals').select('*').then((r) => r, () => ({ data: [], error: null })),
+  ]);
+  if (settings.data) M.set('settings', rowToSettings(settings.data));
+  if (currencies.data) M.set('currencies', currencies.data.map((c) => ({ code: c.code, symbol: c.symbol })));
+  if (rates.data) M.set('rates', Object.fromEntries(rates.data.map((r) => [r.code, Number(r.rate)])));
+  if (categories.data) M.set('categories', categories.data.map(rowToCat));
+  if (expenses.data) M.set('expenses', expenses.data.map(rowToExp));
+  if (itinerary.data) M.set('itinerary', itinerary.data.map((r) => ({ date: r.date, place: r.place, lat: r.lat == null ? null : Number(r.lat), lon: r.lon == null ? null : Number(r.lon), line: r.line })));
+  if (withdrawals && withdrawals.data) M.set('withdrawals', withdrawals.data.map((r) => ({ id: r.id, amount: Number(r.amount), currency: r.currency, baseAmount: Number(r.base_amount), who: r.who, createdAt: new Date(r.created_at).getTime() })));
+}
+
+async function sync() {
+  try { await flush(); } catch (e) { /* stays queued */ }
+  try { await pull(); emitSync(); } catch (e) { emitSync(); /* offline: keep mirror */ }
+}
+
+// connectivity + periodic drains
+window.addEventListener('online', () => { emitSync(); sync().then(() => window.onSynced && window.onSynced()); });
+window.addEventListener('offline', emitSync);
+setInterval(() => { if (outbox.length) flush(); }, 20000);
+
+// ---------- first-run server seed (online bootstrap; no-op once seeded) ----------
+const SEED_CURRENCIES = [{ code: 'USD', symbol: '$' }, { code: 'EUR', symbol: '€' }, { code: 'ILS', symbol: '₪' }, { code: 'CHF', symbol: '₣' }];
+const SEED_RATES = { USD: 1, EUR: 1.08, ILS: 0.27, CHF: 1.10 };
+const SEED_ITIN = [
+  { date: '2026-07-25', place: 'Vienna', lat: 48.2082, lon: 16.3738, line: 'Landing day.' },
+];
+async function seedIfEmpty() {
+  const { count } = await sb.from('categories').select('id', { count: 'exact', head: true });
+  if (count) return;
+  await sb.from('currencies').upsert(SEED_CURRENCIES, { onConflict: 'code' });
+  await sb.from('rates').upsert(Object.entries(SEED_RATES).map(([code, rate]) => ({ code, rate })), { onConflict: 'code' });
+  const tops = [
+    { name: 'Accommodation', icon: '🏠', budget: 11000, color: '#5b7cfa', order: 0 },
+    { name: 'Car', icon: '🚗', budget: 0, color: '#ff8a4c', order: 1 },
+    { name: 'Food & Drinks', icon: '🍴', budget: 3500, color: '#14b8a6', order: 2 },
+    { name: 'Attractions', icon: '🎟️', budget: 2000, color: '#f5b301', order: 3 },
+    { name: 'Miscellaneous', icon: '✨', budget: 645, color: '#ec5f9a', order: 4 },
+  ];
+  const topRows = unwrap(await sb.from('categories').insert(tops).select());
+  const carId = topRows.find((r) => r.name === 'Car').id;
+  await sb.from('categories').insert([
+    { name: 'Rental', icon: '🚙', budget: 1800, color: '#ff8a4c', order: 0, parent_id: carId },
+    { name: 'Fuel', icon: '⛽', budget: 700, color: '#ffa96e', order: 1, parent_id: carId },
+    { name: 'Vignettes', icon: '🛣️', budget: 355, color: '#ffc39a', order: 2, parent_id: carId },
+  ]);
+  await sb.from('settings').update({ trip_name: 'Austria 2026' }).eq('id', 1);
+  const { count: ic } = await sb.from('itinerary').select('id', { count: 'exact', head: true });
+  if (!ic) await sb.from('itinerary').insert(SEED_ITIN);
+}
+
+// ---------- sorted reads from the mirror ----------
+const sortedCats = (list) => list.slice().sort((a, b) => { const pa = a.parentId || '', pb = b.parentId || ''; if (pa !== pb) return pa < pb ? -1 : 1; return a.order - b.order; });
+
 const Store = {
-  async init() { await seedIfEmpty(); },
+  async init() {
+    await sync(); // flush pending + pull fresh (offline: no-op, mirror stands)
+    if (navigator.onLine && (M.get('categories', []).length === 0)) {
+      try { await seedIfEmpty(); await pull(); emitSync(); } catch (e) { console.warn('seed skipped', e); }
+    }
+  },
+  sync,                       // exposed so app.js can trigger on focus/realtime
+  syncState: () => syncState,
 
-  // ---- settings ----
-  async getSettings() { return rowToSettings(unwrap(await sb.from('settings').select('*').eq('id', 1).single())); },
+  async getSettings() { return M.get('settings', DEFAULT_SETTINGS); },
   async saveSettings(patch) {
-    return rowToSettings(unwrap(await sb.from('settings').update(settingsPatchToRow(patch)).eq('id', 1).select().single()));
+    const next = { ...M.get('settings', DEFAULT_SETTINGS), ...patch };
+    M.set('settings', next); enqueue({ entity: 'settings', kind: 'patch', data: patch }); return next;
   },
 
-  // ---- itinerary ----
-  async getItinerary() {
-    const rows = unwrap(await sb.from('itinerary').select('*').order('date', { ascending: true }));
-    return rows.map((r) => ({ date: r.date, place: r.place, lat: r.lat == null ? null : Number(r.lat), lon: r.lon == null ? null : Number(r.lon), line: r.line }));
-  },
-  async saveItinerary(list) {
-    await sb.from('itinerary').delete().not('id', 'is', null); // clear table
-    if (list.length) unwrap(await sb.from('itinerary').insert(list.map((x) => ({ date: x.date, place: x.place, lat: x.lat, lon: x.lon, line: x.line || '' }))));
-    return list;
-  },
+  async getItinerary() { return M.get('itinerary', []).slice().sort((a, b) => a.date.localeCompare(b.date)); },
+  async saveItinerary(list) { M.set('itinerary', list); enqueue({ entity: 'itinerary', kind: 'replace', data: list }); return list; },
 
-  // ---- currencies + rates ----
-  async getCurrencies() { return unwrap(await sb.from('currencies').select('*')); },
-  async saveCurrencies(list) {
-    const existing = unwrap(await sb.from('currencies').select('code'));
-    const keep = new Set(list.map((c) => c.code));
-    const toDelete = existing.map((r) => r.code).filter((c) => !keep.has(c));
-    if (toDelete.length) { try { await sb.from('currencies').delete().in('code', toDelete); } catch (e) { console.warn('currency in use, skipped delete', e); } }
-    unwrap(await sb.from('currencies').upsert(list.map((c) => ({ code: c.code, symbol: c.symbol })), { onConflict: 'code' }));
-    return list;
-  },
-  async getRates() {
-    const rows = unwrap(await sb.from('rates').select('*'));
-    return Object.fromEntries(rows.map((r) => [r.code, Number(r.rate)]));
-  },
-  async saveRates(rates) {
-    unwrap(await sb.from('rates').upsert(Object.entries(rates).map(([code, rate]) => ({ code, rate: Number(rate) })), { onConflict: 'code' }));
-    return rates;
-  },
+  async getCurrencies() { return M.get('currencies', SEED_CURRENCIES); },
+  async saveCurrencies(list) { M.set('currencies', list); enqueue({ entity: 'currencies', kind: 'replace', data: list }); return list; },
+  async getRates() { return M.get('rates', SEED_RATES); },
+  async saveRates(rates) { M.set('rates', rates); enqueue({ entity: 'rates', kind: 'save', data: rates }); return rates; },
 
-  // ---- categories ----
-  async getCategories() {
-    const rows = unwrap(await sb.from('categories').select('*'));
-    return rows.map(rowToCat).sort((a, b) => {
-      const pa = a.parentId || '', pb = b.parentId || '';
-      if (pa !== pb) return pa < pb ? -1 : 1;
-      return a.order - b.order;
-    });
-  },
+  async getCategories() { return sortedCats(M.get('categories', [])); },
   async upsertCategory(cat) {
-    if (cat.id) return rowToCat(unwrap(await sb.from('categories').update(catPatchToRow(cat)).eq('id', cat.id).select().single()));
-    // null needs .is(), not .eq() — Postgres NULL never equals anything
-    let q = sb.from('categories').select('id');
-    q = cat.parentId ? q.eq('parent_id', cat.parentId) : q.is('parent_id', null);
-    const siblings = unwrap(await q);
-    const row = { ...catPatchToRow(cat), order: siblings.length };
-    return rowToCat(unwrap(await sb.from('categories').insert(row).select().single()));
+    const list = M.get('categories', []);
+    if (cat.id) {
+      const i = list.findIndex((c) => c.id === cat.id);
+      if (i >= 0) list[i] = { ...list[i], ...cat };
+      M.set('categories', list);
+      enqueue({ entity: 'categories', kind: 'update', data: { id: cat.id, patch: cat } });
+      return list[i];
+    }
+    const siblings = list.filter((c) => (c.parentId || null) === (cat.parentId || null));
+    const row = { id: uuid(), name: cat.name, icon: cat.icon, color: cat.color, budget: Number(cat.budget) || 0, parentId: cat.parentId ?? null, order: siblings.length, separate: !!cat.separate };
+    list.push(row); M.set('categories', list);
+    enqueue({ entity: 'categories', kind: 'add', data: row });
+    return row;
   },
   async deleteCategory(id) {
-    // children + their expenses cascade automatically (FK ON DELETE CASCADE)
-    unwrap(await sb.from('categories').delete().eq('id', id));
+    let list = M.get('categories', []);
+    const childIds = list.filter((c) => c.parentId === id).map((c) => c.id);
+    const dead = new Set([id, ...childIds]);
+    M.set('categories', list.filter((c) => !dead.has(c.id)));
+    M.set('expenses', M.get('expenses', []).filter((e) => !dead.has(e.categoryId))); // mirror the FK cascade
+    enqueue({ entity: 'categories', kind: 'delete', data: { id } }); // server cascades
   },
 
-  // ---- expenses ----
-  async getExpenses() {
-    const rows = unwrap(await sb.from('expenses').select('*').order('created_at', { ascending: false }));
-    return rows.map(rowToExp);
-  },
+  async getExpenses() { return M.get('expenses', []).slice().sort((a, b) => b.createdAt - a.createdAt); },
   async addExpense(exp) {
     const row = {
-      category_id: exp.categoryId, amount: Number(exp.amount), currency: exp.currency,
-      base_amount: Number(exp.baseAmount), paid_amount: Number(exp.paidAmount || 0), paid_base: Number(exp.paidBase || 0),
-      note: exp.note || '', who: exp.who || '',
+      id: exp.id || uuid(), categoryId: exp.categoryId, amount: Number(exp.amount), currency: exp.currency,
+      baseAmount: Number(exp.baseAmount), paidAmount: Number(exp.paidAmount || 0), paidBase: Number(exp.paidBase || 0),
+      note: exp.note || '', who: exp.who || '', payMethod: exp.payMethod || 'card', halfFare: !!exp.halfFare,
+      createdAt: exp.createdAt || Date.now(),
     };
-    return rowToExp(unwrap(await sb.from('expenses').insert(row).select().single()));
+    M.set('expenses', [...M.get('expenses', []), row]);
+    enqueue({ entity: 'expenses', kind: 'add', data: row });
+    return row;
   },
   async updateExpense(id, patch) {
-    return rowToExp(unwrap(await sb.from('expenses').update(expPatchToRow(patch)).eq('id', id).select().single()));
+    const list = M.get('expenses', []); const i = list.findIndex((e) => e.id === id);
+    if (i >= 0) { list[i] = { ...list[i], ...patch }; M.set('expenses', list); }
+    enqueue({ entity: 'expenses', kind: 'update', data: { id, patch } });
+    return list[i];
   },
-  async deleteExpense(id) { unwrap(await sb.from('expenses').delete().eq('id', id)); },
+  async deleteExpense(id) {
+    M.set('expenses', M.get('expenses', []).filter((e) => e.id !== id));
+    enqueue({ entity: 'expenses', kind: 'delete', data: { id } });
+  },
 
-  // ---- cash withdrawals (the cash pot's inflows) ----
-  async getWithdrawals() {
-    const rows = unwrap(await sb.from('withdrawals').select('*').order('created_at', { ascending: false }));
-    return rows.map((r) => ({
-      id: r.id, amount: Number(r.amount), currency: r.currency,
-      baseAmount: Number(r.base_amount), who: r.who, createdAt: new Date(r.created_at).getTime(),
-    }));
-  },
+  async getWithdrawals() { return M.get('withdrawals', []).slice().sort((a, b) => b.createdAt - a.createdAt); },
   async addWithdrawal(w) {
-    unwrap(await sb.from('withdrawals').insert({
-      amount: Number(w.amount), currency: w.currency,
-      base_amount: Number(w.baseAmount), who: w.who || '',
-    }).select().single());
+    const row = { id: uuid(), amount: Number(w.amount), currency: w.currency, baseAmount: Number(w.baseAmount), who: w.who || '', createdAt: Date.now() };
+    M.set('withdrawals', [...M.get('withdrawals', []), row]);
+    enqueue({ entity: 'withdrawals', kind: 'add', data: row });
+    return row;
   },
-  async deleteWithdrawal(id) { unwrap(await sb.from('withdrawals').delete().eq('id', id)); },
+  async deleteWithdrawal(id) {
+    M.set('withdrawals', M.get('withdrawals', []).filter((w) => w.id !== id));
+    enqueue({ entity: 'withdrawals', kind: 'delete', data: { id } });
+  },
 };
 
 window.Store = Store;
