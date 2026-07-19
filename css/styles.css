@@ -236,15 +236,8 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   transition: width .5s cubic-bezier(.22, 1, .36, 1);
 }
 .bar__seg--committed { opacity: .28; }
-.bar__seg--paid {
-  background-image: linear-gradient(120deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.35) 50%, rgba(255,255,255,0) 70%), var(--seg-grad, none);
-  background-size: 200% 100%, 100% 100%;
-  animation: shine 2.6s ease-in-out infinite;
-}
-@keyframes shine {
-  0%, 60% { background-position: -120% 0, 0 0; }
-  100% { background-position: 220% 0, 0 0; }
-}
+/* paid segment uses the inline gradient set by barSegs(); the width-fill
+   transition is the meaningful motion — no perpetual shimmer. */
 
 /* ---------- Category cards ---------- */
 .cat {
