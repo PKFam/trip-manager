@@ -122,6 +122,7 @@ function renderHero() {
   } else if (!art.querySelector('svg')) {
     location.reload(); // default SVG lives in the HTML; simplest restore after clearing a photo
   }
+  renderCountdown();
 }
 
 // Today's itinerary stop = the latest stop whose date is <= today (or the first stop).
@@ -211,8 +212,9 @@ function renderDashboard() {
   const totalPaid = t.roots.reduce((s, c) => s + t.paid[c.id], 0);
   const totalLeft = totalBudget - totalCommitted;
 
-  state.heroVals = { committed: totalCommitted, left: totalLeft };
-  renderHeroMoney(false);
+  setMoney($('#totalCommitted'), totalCommitted);
+  setMoney($('#totalLeft'), totalLeft);
+  $('#totalLeft').classList.toggle('is-over', totalLeft < 0);
   setMoney($('#statBudget'), totalBudget);
   setMoney($('#statPaid'), totalPaid);
   setMoney($('#statOutstanding'), totalCommitted - totalPaid);
@@ -272,31 +274,36 @@ function renderSubs(parent, t) {
   return html + '</div>';
 }
 
-// ================= ROTATING CURRENCY HERO =================
-// The two hero numbers cycle through all currencies with a crossfade,
-// ~6s each, forever. The manual picker still rules the rest of the app.
-function renderHeroMoney(fade) {
-  if (!state.heroVals) return;
-  const codes = state.currencies.map((c) => c.code);
-  const code = (reducedMotion || !codes.length) ? disp() : codes[state.rotIdx % codes.length];
-  const els = [$('#totalCommitted'), $('#totalLeft'), $('#heroCurCode')];
-  const apply = () => {
-    const show = (v) => Currency.format(Math.round(Currency.fromBase(v, code, state.rates)), code, state.currencies);
-    $('#totalCommitted').textContent = show(state.heroVals.committed);
-    $('#totalLeft').textContent = show(state.heroVals.left);
-    $('#totalLeft').classList.toggle('is-over', state.heroVals.left < 0);
-    $('#heroCurCode').textContent = code;
-  };
-  if (!fade || reducedMotion) { apply(); return; }
-  els.forEach((n) => n.classList.add('fading'));
-  setTimeout(() => { apply(); els.forEach((n) => n.classList.remove('fading')); }, 380);
+// ================= COUNTDOWN (hero clock) =================
+// Derived from the itinerary's first/last dates: counts down to takeoff,
+// then counts the trip days, then rests. Refreshes every minute so it
+// rolls over midnight without a reload.
+function renderCountdown() {
+  const box = $('#heroCountdown');
+  if (!state.itinerary.length) { box.hidden = true; return; }
+  const start = new Date(state.itinerary[0].date + 'T00:00:00');
+  const last = new Date(state.itinerary[state.itinerary.length - 1].date + 'T23:59:59');
+  const now = new Date();
+  let big, small;
+  if (now < start) {
+    const days = Math.ceil((start - now) / 86400e3);
+    big = String(days);
+    small = days === 1 ? 'day to go' : 'days to go';
+  } else if (now <= last) {
+    const day = Math.floor((now - start) / 86400e3) + 1;
+    const lastMid = new Date(state.itinerary[state.itinerary.length - 1].date + 'T00:00:00');
+    const total = Math.round((lastMid - start) / 86400e3) + 1; // inclusive day count
+    big = 'Day ' + day;
+    small = 'of ' + total;
+  } else {
+    big = '🏁';
+    small = 'trip complete';
+  }
+  $('#cdBig').textContent = big;
+  $('#cdSmall').textContent = small;
+  box.hidden = false;
 }
-state.rotIdx = 0;
-setInterval(() => {
-  if (state.tab !== 'home' || reducedMotion || !state.heroVals) return;
-  state.rotIdx++;
-  renderHeroMoney(true);
-}, 6000);
+setInterval(() => { if (state.tab === 'home' && state.itinerary.length) renderCountdown(); }, 60e3);
 
 // ================= DONUT (breakdown) =================
 function renderDonut() {
@@ -336,12 +343,26 @@ function renderDonut() {
       <span class="donut-center__lbl">committed</span>`;
   }
 
-  svg.querySelectorAll('.donut-seg').forEach((n) => {
-    n.onclick = () => {
-      state.donutFocus = state.donutFocus === n.dataset.cat ? null : n.dataset.cat;
-      renderDonut();
-    };
-  });
+  // legend — mirrors the slices; tapping a row focuses that slice (and back)
+  const legend = $('#donutLegend');
+  legend.innerHTML = data.map((d) => {
+    const pctOf = Math.round((d.v / total) * 100);
+    const on = state.donutFocus === d.c.id;
+    return `
+      <button type="button" class="lg-row ${on ? 'is-on' : ''}" data-cat="${d.c.id}">
+        <span class="lg-dot" style="background:${d.c.color}"></span>
+        <span class="lg-name">${catIcon(d.c)} ${escapeHtml(d.c.name)}</span>
+        <span class="lg-amt">${fmtBase(d.v)}</span>
+        <span class="lg-pct">${pctOf}%</span>
+      </button>`;
+  }).join('');
+
+  const toggleFocus = (id) => {
+    state.donutFocus = state.donutFocus === id ? null : id;
+    renderDonut();
+  };
+  svg.querySelectorAll('.donut-seg').forEach((n) => { n.onclick = () => toggleFocus(n.dataset.cat); });
+  legend.querySelectorAll('.lg-row').forEach((n) => { n.onclick = () => toggleFocus(n.dataset.cat); });
 }
 
 // ================= SPEND PER DAY (Ledger) =================

@@ -1,20 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
 
 :root {
-  --bg: #f2f4fd;
+  /* Alpine Dusk — warm limestone body, night-navy identity moments */
+  --bg: #f4f3ef;
   --card: #ffffff;
-  --ink: #1e2440;
-  --ink-soft: #6b7394;
-  --line: #e4e8f5;
+  --ink: #1c2033;
+  --ink-soft: #676e88;
+  --line: #e7e5de;
+  --navy: #232a52;
   --primary: #5b7cfa;
   --primary-deep: #3d55d8;
   --accent: #ff8a4c;
   --danger: #e5484d;
   --ok: #17a67c;
-  --track: #eceff9;
+  --track: #edece6;
   --radius: 22px;
-  --shadow: 0 3px 14px rgba(30, 36, 77, 0.07);
-  --shadow-lift: 0 6px 22px rgba(30, 36, 77, 0.13);
+  /* layered shadows: tight contact + soft ambient */
+  --shadow: 0 1px 2px rgba(28, 32, 51, 0.05), 0 8px 24px rgba(28, 32, 51, 0.07);
+  --shadow-lift: 0 2px 4px rgba(28, 32, 51, 0.08), 0 14px 34px rgba(28, 32, 51, 0.14);
+  --t-fast: 160ms ease;
+  --t-spring: 300ms cubic-bezier(.22, 1, .36, 1);
   --font-display: 'Fredoka', -apple-system, sans-serif;
   --font-body: 'Nunito', -apple-system, sans-serif;
   --safe-top: env(safe-area-inset-top, 0px);
@@ -42,9 +47,9 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(560px 400px at 88% -6%, rgba(123, 108, 246, .18), transparent 62%),
-    radial-gradient(500px 380px at -12% 22%, rgba(255, 157, 118, .15), transparent 60%),
-    radial-gradient(640px 480px at 55% 108%, rgba(20, 184, 166, .12), transparent 62%);
+    radial-gradient(560px 400px at 88% -6%, rgba(123, 108, 246, .13), transparent 62%),
+    radial-gradient(500px 380px at -12% 22%, rgba(255, 157, 118, .12), transparent 60%),
+    radial-gradient(640px 480px at 55% 108%, rgba(20, 184, 166, .09), transparent 62%);
 }
 
 :focus-visible { outline: 2.5px solid var(--primary); outline-offset: 2px; }
@@ -55,20 +60,26 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 .view { max-width: 640px; margin: 0 auto; padding: 0 14px 20px; }
 .view.anim { animation: rise .34s cubic-bezier(.22, 1, .36, 1); }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+/* gentle per-card stagger on view entry */
+.view.anim > * { animation: rise .4s cubic-bezier(.22, 1, .36, 1) backwards; }
+.view.anim > *:nth-child(2) { animation-delay: 40ms; }
+.view.anim > *:nth-child(3) { animation-delay: 80ms; }
+.view.anim > *:nth-child(4) { animation-delay: 120ms; }
+.view.anim > *:nth-child(n+5) { animation-delay: 160ms; }
 .page-title {
   font-family: var(--font-display);
   font-size: 26px;
   margin: calc(18px + var(--safe-top)) 4px 14px;
 }
 
-/* ---------- Cards (glass) ---------- */
+/* ---------- Cards (glass, dual-edge) ---------- */
 .card-soft {
-  background: rgba(255, 255, 255, .64);
+  background: rgba(255, 255, 255, .68);
   backdrop-filter: blur(16px) saturate(160%);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, .65);
+  border: 1px solid rgba(28, 32, 51, .05);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .65), var(--shadow);
   padding: 16px;
   margin-bottom: 14px;
 }
@@ -209,10 +220,10 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   font-size: 17px; font-weight: 600;
   padding: 14px;
   border-radius: 16px;
-  box-shadow: 0 6px 18px rgba(91, 124, 250, .4);
-  transition: transform .15s ease, box-shadow .15s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 6px 18px rgba(91, 124, 250, .38);
+  transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
-.btn-add:active { transform: scale(.97); box-shadow: 0 3px 10px rgba(91, 124, 250, .35); }
+.btn-add:active { transform: scale(.97); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 10px rgba(91, 124, 250, .32); }
 
 /* ---------- Summary ---------- */
 .summary__top { display: flex; justify-content: space-between; align-items: flex-end; }
@@ -244,6 +255,7 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   position: relative;
   height: 12px;
   background: var(--track);
+  box-shadow: inset 0 1px 2.5px rgba(28, 32, 51, .07);
   border-radius: 999px;
   overflow: hidden;
   margin-top: 12px;
@@ -260,12 +272,12 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 
 /* ---------- Category cards ---------- */
 .cat {
-  background: rgba(255, 255, 255, .64);
+  background: rgba(255, 255, 255, .68);
   backdrop-filter: blur(16px) saturate(160%);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, .65);
+  border: 1px solid rgba(28, 32, 51, .05);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .65), var(--shadow);
   padding: 14px 16px;
   margin-bottom: 12px;
 }
@@ -296,16 +308,16 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 /* ---------- Ledger board ---------- */
 .lrow {
   display: flex; align-items: center; gap: 12px;
-  background: rgba(255, 255, 255, .64);
+  background: rgba(255, 255, 255, .68);
   backdrop-filter: blur(16px) saturate(160%);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, .65);
+  border: 1px solid rgba(28, 32, 51, .05);
   border-radius: 18px;
-  box-shadow: var(--shadow);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .65), var(--shadow);
   padding: 11px 14px;
   margin-bottom: 10px;
   width: 100%; text-align: left;
-  transition: transform .15s ease;
+  transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
 .lrow:active { transform: scale(.98); }
 .lrow .icobox { width: 40px; height: 40px; }
@@ -349,10 +361,13 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   font-size: 10.5px; font-weight: 800;
   color: var(--ink-soft);
-  padding: 4px 18px; border-radius: 14px;
-  transition: color .15s;
+  padding: 6px 20px; border-radius: 15px;
+  transition: color var(--t-fast), background var(--t-fast), transform var(--t-fast);
 }
-.nav__btn.is-active { color: var(--primary-deep); }
+.nav__btn.is-active {
+  color: var(--primary-deep);
+  background: color-mix(in srgb, var(--primary) 11%, transparent);
+}
 .nav__btn:active { transform: scale(.94); }
 
 /* ---------- Sheets ---------- */
@@ -438,19 +453,61 @@ input, select { font-family: var(--font-body); color: var(--ink); }
   100% { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)) scale(.6); opacity: 0; }
 }
 
-/* ---------- Rotating currency hero ---------- */
-.summary__code {
-  display: inline-block;
-  font-size: 10px; font-weight: 800;
-  background: var(--track);
-  color: var(--primary-deep);
-  border-radius: 999px;
-  padding: 2px 7px;
-  margin-left: 4px;
-  vertical-align: middle;
+/* ---------- Countdown clock (hero) ---------- */
+.hero__count {
+  position: absolute;
+  top: 14px; right: 14px;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 78px;
+  padding: 10px 14px 9px;
+  border-radius: 18px;
+  background: rgba(20, 24, 54, .38);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 4px 14px rgba(0, 0, 0, .18);
+  color: #fff;
+  text-align: center;
 }
-#totalCommitted, #totalLeft, .summary__code { transition: opacity .38s ease; }
-.fading { opacity: 0 !important; }
+.hero__count-big {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 700; line-height: 1.05;
+  letter-spacing: -.01em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .3);
+  font-variant-numeric: tabular-nums;
+}
+.hero__count-small {
+  font-size: 9.5px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .09em;
+  opacity: .85;
+  margin-top: 2px;
+}
+
+/* ---------- Donut legend ---------- */
+.donut-legend {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  margin-top: 12px;
+}
+.lg-row {
+  display: flex; align-items: center; gap: 9px;
+  border: none;
+  background: transparent;
+  border-radius: 11px;
+  padding: 8px 10px;
+  font-family: var(--font-body);
+  font-size: 13px; font-weight: 700;
+  color: var(--ink);
+  transition: background var(--t-fast), transform var(--t-fast);
+  text-align: left;
+  min-width: 0;
+}
+.lg-row:active { transform: scale(.96); }
+.lg-row.is-on { background: var(--track); }
+.lg-dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.lg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-amt { margin-left: auto; color: var(--ink-soft); font-variant-numeric: tabular-nums; flex: none; }
+.lg-pct { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; flex: none; width: 33px; text-align: right; }
 
 /* ---------- Overspend ---------- */
 .bar__seg--over {
@@ -488,7 +545,6 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 .donut-center__ico { font-size: 22px; line-height: 1.2; }
 .donut-center__amt { font-family: var(--font-display); font-size: 21px; font-weight: 700; line-height: 1.15; }
 .donut-center__lbl { font-size: 11px; font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
-.donut-hint { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-soft); margin: 6px 0 0; opacity: .7; }
 
 /* ---------- Spend per day (Ledger) ---------- */
 .dc-head { display: flex; justify-content: space-between; align-items: baseline; }
