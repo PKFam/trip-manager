@@ -81,7 +81,7 @@ function catLabel(c) {
   const p = c.parentId ? catById(c.parentId) : null;
   return p ? `${p.name} · ${c.name}` : c.name;
 }
-function catIcon(c) { return (c && c.icon) || '💸'; }
+function catIcon(c) { return (c && c.icon) || '🏷️'; }
 function iconBox(c, size) {
   const color = c ? c.color : '#5b7cfa';
   const s = size ? `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.54)}px;border-radius:${Math.round(size * 0.3)}px;` : '';

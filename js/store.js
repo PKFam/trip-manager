@@ -23,6 +23,28 @@ const write = (name, value) => localStorage.setItem(k(name), JSON.stringify(valu
 const uid = () =>
   Date.now().toString(36) + Math.floor(performance.now() % 1000).toString(36) + Math.floor(Math.random() * 1e6).toString(36);
 
+// Guess a sensible emoji from a category name — used to backfill categories
+// that were created before the icon field existed (migration).
+function guessIcon(name) {
+  const n = (name || '').toLowerCase();
+  const rules = [
+    [/(accom|hotel|stay|lodg|airbnb|room|night)/, '🏠'],
+    [/(rental|hire)/, '🚙'],
+    [/(fuel|gas|petrol|diesel|charg)/, '⛽'],
+    [/(vignet|toll|motorway|highway|parking)/, '🛣️'],
+    [/car|drive|vehicle/, '🚗'],
+    [/(train|rail|metro|bus|transit|transport)/, '🚆'],
+    [/(flight|plane|air)/, '✈️'],
+    [/(food|drink|dining|restaurant|eat|meal|coffee|bar|grocer)/, '🍴'],
+    [/(attraction|ticket|sight|museum|tour|activit|entry)/, '🎟️'],
+    [/(shop|gift|souvenir)/, '🛍️'],
+    [/(health|pharmac|medic)/, '💊'],
+    [/(misc|other|sundr|extra)/, '✨'],
+  ];
+  for (const [re, ico] of rules) if (re.test(n)) return ico;
+  return '🏷️';
+}
+
 // ---- Seed data (Gil's real trip numbers; editable in-app) ----
 const SEED_SETTINGS = {
   tripName: 'Austria 2026',
@@ -77,6 +99,13 @@ const Store = {
     if (read('categories', null) === null) write('categories', SEED_CATEGORIES);
     if (read('expenses', null) === null) write('expenses', []);
     if (read('itinerary', null) === null) write('itinerary', SEED_ITINERARY);
+
+    // migrate: backfill emoji icons for categories saved before the icon field
+    // existed (otherwise they render the fallback money emoji everywhere).
+    const cats = read('categories', []);
+    let changed = false;
+    for (const c of cats) if (!c.icon) { c.icon = guessIcon(c.name); changed = true; }
+    if (changed) write('categories', cats);
   },
 
   // ---- settings ----
