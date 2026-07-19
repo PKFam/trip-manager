@@ -18,7 +18,7 @@ function unwrap({ data, error }) {
 
 // ---------- field mappers ----------
 function rowToCat(r) {
-  return { id: r.id, name: r.name, icon: r.icon, color: r.color, budget: Number(r.budget), parentId: r.parent_id, order: r.order };
+  return { id: r.id, name: r.name, icon: r.icon, color: r.color, budget: Number(r.budget), parentId: r.parent_id, order: r.order, separate: !!r.separate };
 }
 function catPatchToRow(p) {
   const row = {};
@@ -28,6 +28,7 @@ function catPatchToRow(p) {
   if ('budget' in p) row.budget = Number(p.budget);
   if ('parentId' in p) row.parent_id = p.parentId;
   if ('order' in p) row.order = p.order;
+  if ('separate' in p) row.separate = !!p.separate;
   return row;
 }
 

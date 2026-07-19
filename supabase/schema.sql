@@ -49,8 +49,10 @@ create table if not exists categories (
   color text not null default '#5b7cfa',
   budget numeric not null default 0,
   parent_id uuid references categories(id) on delete cascade,
-  "order" int not null default 0
+  "order" int not null default 0,
+  separate boolean not null default false  -- true = own bucket, excluded from trip totals (e.g. Shopping)
 );
+alter table categories add column if not exists separate boolean not null default false;
 
 -- ---------- expenses ----------
 create table if not exists expenses (
