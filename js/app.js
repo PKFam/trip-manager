@@ -30,8 +30,11 @@ async function loadAll() {
 
 // ---------- money helpers ----------
 const disp = () => state.settings.displayCurrency;
+// Dashboard money is rounded to whole units — the sub-unit "cents" on
+// currency-converted totals are conversion noise, not information. (The
+// ledger still shows each transaction's exact entered amount.)
 const fmtBase = (baseAmount) =>
-  Currency.format(Currency.fromBase(baseAmount, disp(), state.rates), disp(), state.currencies);
+  Currency.format(Math.round(Currency.fromBase(baseAmount, disp(), state.rates)), disp(), state.currencies);
 
 // ---------- category tree + aggregation ----------
 function buildTree() {
@@ -100,18 +103,19 @@ function setMoney(elm, baseAmount) {
   const target = Currency.fromBase(baseAmount, disp(), state.rates);
   const prev = Number(elm.dataset.val || 0);
   elm.dataset.val = target;
-  if (reducedMotion || Math.abs(target - prev) < 0.01) {
-    elm.textContent = Currency.format(target, disp(), state.currencies);
+  const fmt = (v) => Currency.format(Math.round(v), disp(), state.currencies);
+  if (reducedMotion || Math.abs(target - prev) < 0.5) {
+    elm.textContent = fmt(target);
     return;
   }
   const t0 = performance.now(), dur = 450;
-  const final = () => { elm.textContent = Currency.format(target, disp(), state.currencies); };
+  const final = () => { elm.textContent = fmt(target); };
   // failsafe: rAF can be throttled (background tab) — always land on the exact value
   const guard = setTimeout(final, dur + 120);
   (function tick(t) {
     const p = Math.min((t - t0) / dur, 1);
     const eased = 1 - Math.pow(1 - p, 3);
-    elm.textContent = Currency.format(prev + (target - prev) * eased, disp(), state.currencies);
+    elm.textContent = fmt(prev + (target - prev) * eased);
     if (p < 1) requestAnimationFrame(tick);
     else { clearTimeout(guard); final(); }
   })(t0);
