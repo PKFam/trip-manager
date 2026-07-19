@@ -213,5 +213,14 @@
   <script src="js/store.js"></script>
   <script src="js/currency.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    // Register the auto-updater. updateViaCache:'none' keeps the SW script itself
+    // out of the HTTP cache, so improvements to the updater reach devices promptly.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
