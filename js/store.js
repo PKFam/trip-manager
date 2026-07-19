@@ -48,14 +48,14 @@ const SEED_CURRENCIES = [
 // Spending is logged only on LEAF categories; parents aggregate their children.
 const ID = { acc: uid(), car: uid(), food: uid(), attr: uid(), misc: uid() };
 const SEED_CATEGORIES = [
-  { id: ID.acc, name: 'Accommodation', budget: 11000, color: '#5b7cfa', order: 0, parentId: null },
-  { id: ID.car, name: 'Car', budget: 0, color: '#ff8a4c', order: 1, parentId: null },
-  { id: uid(), name: 'Rental', budget: 1800, color: '#ff8a4c', order: 0, parentId: ID.car },
-  { id: uid(), name: 'Fuel', budget: 700, color: '#ffa96e', order: 1, parentId: ID.car },
-  { id: uid(), name: 'Vignettes', budget: 355, color: '#ffc39a', order: 2, parentId: ID.car },
-  { id: ID.food, name: 'Food & Drinks', budget: 3500, color: '#14b8a6', order: 2, parentId: null },
-  { id: ID.attr, name: 'Attractions', budget: 2000, color: '#f5b301', order: 3, parentId: null },
-  { id: ID.misc, name: 'Miscellaneous', budget: 645, color: '#ec5f9a', order: 4, parentId: null },
+  { id: ID.acc, name: 'Accommodation', icon: '🏠', budget: 11000, color: '#5b7cfa', order: 0, parentId: null },
+  { id: ID.car, name: 'Car', icon: '🚗', budget: 0, color: '#ff8a4c', order: 1, parentId: null },
+  { id: uid(), name: 'Rental', icon: '🚙', budget: 1800, color: '#ff8a4c', order: 0, parentId: ID.car },
+  { id: uid(), name: 'Fuel', icon: '⛽', budget: 700, color: '#ffa96e', order: 1, parentId: ID.car },
+  { id: uid(), name: 'Vignettes', icon: '🛣️', budget: 355, color: '#ffc39a', order: 2, parentId: ID.car },
+  { id: ID.food, name: 'Food & Drinks', icon: '🍴', budget: 3500, color: '#14b8a6', order: 2, parentId: null },
+  { id: ID.attr, name: 'Attractions', icon: '🎟️', budget: 2000, color: '#f5b301', order: 3, parentId: null },
+  { id: ID.misc, name: 'Miscellaneous', icon: '✨', budget: 645, color: '#ec5f9a', order: 4, parentId: null },
 ];
 
 // Placeholder itinerary — Gil replaces with his real one (from the Word doc).

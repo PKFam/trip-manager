@@ -78,6 +78,12 @@ function catLabel(c) {
   const p = c.parentId ? catById(c.parentId) : null;
   return p ? `${p.name} · ${c.name}` : c.name;
 }
+function catIcon(c) { return (c && c.icon) || '💸'; }
+function iconBox(c, size) {
+  const color = c ? c.color : '#5b7cfa';
+  const s = size ? `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.54)}px;border-radius:${Math.round(size * 0.3)}px;` : '';
+  return `<span class="icobox" style="--ic:${color};${s}">${catIcon(c)}</span>`;
+}
 
 // ---------- gradient bar segments ----------
 function barSegs(budgetB, committedB, paidB, color) {
@@ -211,7 +217,7 @@ function renderDashboard() {
       <div class="cat__head">
         <div class="cat__name ${hasKids ? 'expandable' : ''}" ${hasKids ? `data-toggle="${c.id}"` : ''}>
           ${hasKids ? `<span class="cat__chev ${open ? 'open' : ''}">▸</span>` : ''}
-          <span class="cat__dot" style="background:${c.color}"></span>${escapeHtml(c.name)}
+          ${iconBox(c)}<span>${escapeHtml(c.name)}</span>
         </div>
         <div class="cat__nums"><b>${fmtBase(cm)}</b> / ${fmtBase(b)}</div>
       </div>
@@ -241,7 +247,7 @@ function renderSubs(parent, t) {
     html += `
       <div class="sub">
         <div class="sub__head">
-          <span class="sub__name"><span class="sub__dot" style="background:${k.color}"></span>${escapeHtml(k.name)}</span>
+          <span class="sub__name">${iconBox(k, 22)}${escapeHtml(k.name)}</span>
           <span class="sub__nums"><b>${fmtBase(cm)}</b> / ${fmtBase(b)}</span>
         </div>
         <div class="bar">${barSegs(b, cm, pd, k.color)}</div>
@@ -269,7 +275,7 @@ function renderChips(wrap, getSel, setSel) {
     const chip = el('button', 'chip' + (c.id === getSel() ? ' is-active' : ''));
     chip.type = 'button';
     chip.style.setProperty('--chip-c', c.color);
-    chip.innerHTML = `<span class="chip__dot" style="background:${c.color}"></span>${escapeHtml(catLabel(c))}`;
+    chip.innerHTML = `<span class="chip__ic">${catIcon(c)}</span>${escapeHtml(catLabel(c))}`;
     chip.onclick = () => { setSel(c.id); renderChips(wrap, getSel, setSel); };
     wrap.appendChild(chip);
   }
@@ -347,7 +353,7 @@ function renderLedger() {
     const who = (e.who || '?')[0].toUpperCase();
     const row = el('button', 'lrow');
     row.innerHTML = `
-      <span class="lrow__edge" style="background:${cat ? cat.color : '#ccc'}"></span>
+      ${iconBox(cat, 40)}
       <span class="lrow__main">
         <span class="lrow__cat">${escapeHtml(catLabel(cat))}</span><br/>
         <span class="lrow__note">${escapeHtml(e.note || STATUS_LABEL[st])}</span><br/>
@@ -438,6 +444,7 @@ function renderCatEditor() {
     const group = el('div', 'cat-group');
     const prow = el('div', 'edit-row');
     prow.innerHTML = `
+      <input type="text" class="ico-input" value="${escapeAttr(top.icon || '')}" data-id="${top.id}" data-f="icon" maxlength="3" aria-label="Emoji" />
       <input type="color" value="${top.color}" data-id="${top.id}" data-f="color" />
       <input type="text" value="${escapeAttr(top.name)}" data-id="${top.id}" data-f="name" />
       ${kids.length ? '' : `<input type="number" value="${top.budget}" data-id="${top.id}" data-f="budget" inputmode="decimal" />`}
@@ -447,6 +454,7 @@ function renderCatEditor() {
     for (const kid of kids) {
       const krow = el('div', 'edit-row is-sub');
       krow.innerHTML = `
+        <input type="text" class="ico-input" value="${escapeAttr(kid.icon || '')}" data-id="${kid.id}" data-f="icon" maxlength="3" aria-label="Emoji" />
         <input type="color" value="${kid.color}" data-id="${kid.id}" data-f="color" />
         <input type="text" value="${escapeAttr(kid.name)}" data-id="${kid.id}" data-f="name" />
         <input type="number" value="${kid.budget}" data-id="${kid.id}" data-f="budget" inputmode="decimal" />
@@ -480,7 +488,7 @@ function renderCatEditor() {
   wrap.querySelectorAll('[data-addsub]').forEach((btn) => {
     btn.onclick = async () => {
       const parent = catById(btn.dataset.addsub);
-      await Store.upsertCategory({ name: 'New sub', budget: 0, color: parent.color, parentId: parent.id });
+      await Store.upsertCategory({ name: 'New sub', icon: parent.icon || '💸', budget: 0, color: parent.color, parentId: parent.id });
       await loadAll(); renderCatEditor();
     };
   });
@@ -565,6 +573,10 @@ function switchTab(tab) {
   if (tab === 'ledger') renderLedger();
   if (tab === 'settings') renderSettings();
   window.scrollTo({ top: 0 });
+  // subtle enter animation on the newly shown view (retrigger by reflow)
+  const v = { home: '#homeView', ledger: '#ledgerView', settings: '#settingsView' }[tab];
+  const vEl = $(v);
+  if (vEl && !reducedMotion) { vEl.classList.remove('anim'); void vEl.offsetWidth; vEl.classList.add('anim'); }
 }
 
 // ================= DISPLAY CURRENCY =================
@@ -631,7 +643,7 @@ function wireEvents() {
   $('#addCatBtn').onclick = async () => {
     const colors = ['#5b7cfa', '#ff8a4c', '#14b8a6', '#f5b301', '#ec5f9a', '#7048e8', '#20c997', '#fa5252'];
     const topCount = state.categories.filter((c) => !c.parentId).length;
-    await Store.upsertCategory({ name: 'New category', budget: 0, color: colors[topCount % colors.length], parentId: null });
+    await Store.upsertCategory({ name: 'New category', icon: '💸', budget: 0, color: colors[topCount % colors.length], parentId: null });
     await loadAll(); renderCatEditor();
   };
   $('#addCurBtn').onclick = async () => {
