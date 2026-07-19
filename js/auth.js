@@ -49,8 +49,12 @@ const Auth = {
     const { data: { session } } = await sb.auth.getSession();
     await this.handleSession(session, onReady);
 
-    sb.auth.onAuthStateChange(async (_event, session) => {
-      await this.handleSession(session, onReady);
+    sb.auth.onAuthStateChange((_event, session) => {
+      // CRITICAL: never run supabase queries directly inside this callback.
+      // supabase-js holds an internal auth lock while it fires, and any query
+      // that needs the token deadlocks forever (app boots to a dead skeleton).
+      // Deferring to the next tick releases the lock first.
+      setTimeout(() => this.handleSession(session, onReady), 0);
     });
   },
 

@@ -98,6 +98,7 @@ async function seedIfEmpty() {
       { name: 'Vignettes', icon: '🛣️', budget: 355, color: '#ffc39a', order: 2, parent_id: carId },
     ];
     await sb.from('categories').insert(kids);
+    await sb.from('settings').update({ trip_name: 'Austria 2026' }).eq('id', 1);
   }
 
   const { count: itinCount } = await sb.from('itinerary').select('id', { count: 'exact', head: true });
@@ -156,7 +157,10 @@ const Store = {
   },
   async upsertCategory(cat) {
     if (cat.id) return rowToCat(unwrap(await sb.from('categories').update(catPatchToRow(cat)).eq('id', cat.id).select().single()));
-    const siblings = unwrap(await sb.from('categories').select('id', { count: 'exact', head: false }).eq('parent_id', cat.parentId ?? null));
+    // null needs .is(), not .eq() — Postgres NULL never equals anything
+    let q = sb.from('categories').select('id');
+    q = cat.parentId ? q.eq('parent_id', cat.parentId) : q.is('parent_id', null);
+    const siblings = unwrap(await q);
     const row = { ...catPatchToRow(cat), order: siblings.length };
     return rowToCat(unwrap(await sb.from('categories').insert(row).select().single()));
   },

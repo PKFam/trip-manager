@@ -679,6 +679,7 @@ function switchTab(tab) {
   $('#ledgerView').hidden = tab !== 'ledger';
   $('#settingsView').hidden = tab !== 'settings';
   document.querySelectorAll('.nav__btn').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === tab));
+  if (!state.settings) return; // data still loading — tab is remembered, render happens when boot finishes
   if (tab === 'home') { renderHero(); renderQuickAdd(); renderDashboard(); renderBrief(); }
   if (tab === 'ledger') { renderDayChart(); renderLedger(); }
   if (tab === 'settings') renderSettings();
@@ -767,12 +768,18 @@ let wired = false;
 let realtimeChannel = null;
 
 async function main() {
-  await Store.init();
-  await loadAll();
-  if (!wired) { wireEvents(); wired = true; }
-  renderDisplayCurrencyOptions();
-  switchTab(state.tab || 'home');
-  subscribeRealtime();
+  try {
+    if (!wired) { wireEvents(); wired = true; } // buttons live even while data loads
+    await Store.init();
+    await loadAll();
+    renderDisplayCurrencyOptions();
+    switchTab(state.tab || 'home');
+    subscribeRealtime();
+  } catch (e) {
+    // Never fail silently into a dead skeleton — say what broke.
+    console.error('boot failed', e);
+    alert('Could not load trip data: ' + (e && e.message ? e.message : e));
+  }
 }
 
 // Live sync: when Gil or Tammy's phone writes anywhere, both phones pick it
