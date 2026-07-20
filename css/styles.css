@@ -445,6 +445,7 @@ input, select { font-family: var(--font-body); color: var(--ink); }
 .lrow__cat { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); }
 .lrow__note { font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lrow__date { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
+.lrow__fx { font-size: 11px; color: var(--ink-soft); font-weight: 700; font-variant-numeric: tabular-nums; opacity: .9; }
 .lrow__right { text-align: right; flex: none; }
 .lrow__amt { font-family: var(--font-display); font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; }
 .lrow__badges { display: flex; gap: 5px; justify-content: flex-end; margin-top: 3px; align-items: center; }

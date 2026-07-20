@@ -58,7 +58,7 @@ function expPatchToRow(p) {
   if ('halfFare' in p) row.half_fare = !!p.halfFare;
   return row;
 }
-const rowToSettings = (r) => ({ tripName: r.trip_name, tripDates: r.trip_dates, baseCurrency: r.base_currency, displayCurrency: r.display_currency, bannerImage: r.banner_image });
+const rowToSettings = (r) => ({ tripName: r.trip_name, tripDates: r.trip_dates, baseCurrency: r.base_currency, displayCurrency: r.display_currency, bannerImage: r.banner_image, fxFeePct: r.fx_fee_pct == null ? 2.5 : Number(r.fx_fee_pct) });
 function settingsPatchToRow(p) {
   const row = {};
   if ('tripName' in p) row.trip_name = p.tripName;
@@ -66,12 +66,13 @@ function settingsPatchToRow(p) {
   if ('baseCurrency' in p) row.base_currency = p.baseCurrency;
   if ('displayCurrency' in p) row.display_currency = p.displayCurrency;
   if ('bannerImage' in p) row.banner_image = p.bannerImage;
+  if ('fxFeePct' in p) row.fx_fee_pct = Number(p.fxFeePct);
   return row;
 }
 
 // ---------- the mirror (app-shape data cached in localStorage) ----------
 const MK = 'tb:mirror:';
-const DEFAULT_SETTINGS = { tripName: 'Our Trip', tripDates: '', baseCurrency: 'USD', displayCurrency: 'USD', bannerImage: null };
+const DEFAULT_SETTINGS = { tripName: 'Our Trip', tripDates: '', baseCurrency: 'USD', displayCurrency: 'USD', bannerImage: null, fxFeePct: 2.5 };
 const M = {
   get(name, fb) { try { const v = localStorage.getItem(MK + name); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } },
   set(name, v) { try { localStorage.setItem(MK + name, JSON.stringify(v)); } catch (e) { console.warn('mirror full', e); } },

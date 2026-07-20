@@ -34,19 +34,25 @@ async function loadAll() {
 // forever — historical numbers NEVER move when rates change.
 async function refreshRatesDaily() {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    if (localStorage.getItem('tripbudget:ratesday') === today) return;
     const base = state.settings.baseCurrency;
     const others = state.currencies.map((c) => c.code).filter((c) => c !== base);
     if (!others.length) return;
-    const res = await fetch(`https://api.frankfurter.app/latest?from=${base}&to=${others.join(',')}`);
+    const today = new Date().toISOString().slice(0, 10);
+    const missing = others.some((c) => !(c in state.rates));
+    // once per day per device — unless a currency has no rate yet, then fetch now
+    if (localStorage.getItem('tripbudget:ratesday') === today && !missing) return;
+    // Single reliable source: ECB reference rates via frankfurter.dev
+    // (the old frankfurter.app host redirects in a way browsers block).
+    const res = await fetch(`https://api.frankfurter.dev/v1/latest?base=${base}&symbols=${others.join(',')}`);
     if (!res.ok) throw new Error('fx http ' + res.status);
     const data = await res.json();
+    if (!data || !data.rates) throw new Error('fx bad payload');
     const rates = { ...state.rates, [base]: 1 };
     for (const [code, perBase] of Object.entries(data.rates)) rates[code] = 1 / perBase; // 1 CODE in BASE units
     await Store.saveRates(rates);
     state.rates = rates;
     localStorage.setItem('tripbudget:ratesday', today);
+    console.info('FX rates refreshed from ECB for', data.date, rates);
   } catch (e) {
     console.warn('daily rate refresh skipped (offline or API down) — using last known rates', e);
   }
@@ -95,13 +101,16 @@ function buildTree() {
   // conversion markup on every non-base-currency card purchase. Fees ride on
   // the locked base amounts, so they're locked too.
   const baseCur = state.settings ? state.settings.baseCurrency : 'USD';
+  // card FX markup % is user-configurable (Settings); fees are always DERIVED,
+  // never stored — changing the % instantly recalculates past and future.
+  const feeRate = ((state.settings && state.settings.fxFeePct != null ? state.settings.fxFeePct : 2.5)) / 100;
   const fxRoot = allRoots.find((c) => /fx|exchange/i.test(c.name));
   if (fxRoot) {
     let feeC = 0, feeP = 0;
     for (const e of state.expenses) {
       if ((e.payMethod || 'card') === 'card' && e.currency !== baseCur) {
-        feeC += Number(e.baseAmount) * 0.01;
-        feeP += Number(e.paidBase) * 0.01;
+        feeC += Number(e.baseAmount) * feeRate;
+        feeP += Number(e.paidBase) * feeRate;
       }
     }
     committed[fxRoot.id] += feeC;
@@ -834,6 +843,16 @@ function confettiBurst(fromEl, color) {
 }
 
 // ================= LEDGER =================
+// The exact spot rate this transaction was locked at — recovered from the
+// stored numbers themselves (baseAmount / amount), shown to 4 decimals.
+function fxLine(e) {
+  const base = state.settings.baseCurrency;
+  if (e.currency === base || !e.amount) return '';
+  const rate = (Number(e.baseAmount) / Number(e.amount)).toFixed(4);
+  const usd = Currency.format(Math.round(Number(e.baseAmount) * 100) / 100, base, state.currencies);
+  return ` <span class="lrow__fx">· ≈ ${usd} @ ${rate}</span>`;
+}
+
 function expenseStatus(e) {
   if (e.paidBase >= e.baseAmount - 0.005) return 'paid';
   if (e.paidBase > 0) return 'partial';
@@ -859,7 +878,7 @@ function renderLedger() {
       <span class="lrow__main">
         <span class="lrow__cat">${escapeHtml(catLabel(cat))}</span><br/>
         <span class="lrow__note">${escapeHtml(e.note || STATUS_LABEL[st])}</span><br/>
-        <span class="lrow__date">${new Date(e.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+        <span class="lrow__date">${new Date(e.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${fxLine(e)}</span>
       </span>
       <span class="lrow__right">
         <span class="lrow__amt">${Currency.format(e.amount, e.currency, state.currencies)}</span>
@@ -992,6 +1011,7 @@ async function saveEdit(overridePaid) {
 function renderSettings() {
   $('#setTripName').value = state.settings.tripName;
   $('#setTripDates').value = state.settings.tripDates || '';
+  $('#setFxFee').value = state.settings.fxFeePct != null ? state.settings.fxFeePct : 2.5;
   $('#signedInAs').textContent = `${Auth.user.who} · ${Auth.user.email}`;
 
   const baseSel = $('#setBaseCurrency');
@@ -1245,6 +1265,11 @@ function wireEvents() {
   // settings
   $('#setTripName').onchange = async (e) => { state.settings = await Store.saveSettings({ tripName: e.target.value }); };
   $('#setTripDates').onchange = async (e) => { state.settings = await Store.saveSettings({ tripDates: e.target.value }); };
+  $('#setFxFee').onchange = async (e) => {
+    const pct = Math.max(0, Math.min(10, parseFloat(e.target.value) || 0));
+    state.settings = await Store.saveSettings({ fxFeePct: pct });
+    e.target.value = pct;
+  };
   $('#signOutBtn').onclick = () => Auth.signOut();
   $('#setBanner').onchange = (e) => { if (e.target.files[0]) handleBannerUpload(e.target.files[0]); };
   $('#clearBannerBtn').onclick = async () => {

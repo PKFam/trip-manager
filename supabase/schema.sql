@@ -29,6 +29,7 @@ create table if not exists settings (
   constraint settings_singleton check (id = 1)
 );
 insert into settings (id) values (1) on conflict (id) do nothing;
+alter table settings add column if not exists fx_fee_pct numeric not null default 2.5;
 
 -- ---------- currencies + rates ----------
 create table if not exists currencies (
